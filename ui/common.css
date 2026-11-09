@@ -1,0 +1,64 @@
+/* Общие токены Velami: как в настройках macOS (нейтральная палитра, системный шрифт, сгруппированные
+   списки, тонкие разделители) и один тёплый терракотовый акцент на кнопках, переключателях и знаке. Панель на сайте повторяет их в своём Shadow DOM
+   (src/content.js), потому что стили страницы туда не проникают. */
+:root {
+  color-scheme: light dark;
+  --bg: #f5f5f7; --surface: #fff; --surface-2: #ececef; --side: #ececef; --fill: rgba(29, 29, 31, .06); --fill-2: rgba(29, 29, 31, .11);
+  --line: rgba(29, 29, 31, .1); --line-2: rgba(29, 29, 31, .18);
+  --fg: #1d1d1f; --fg-2: #3a3a3c; --muted: #6e6e73;
+  --accent: #c96442; --accent-hover: #b5573a; --accent-soft: rgba(201, 100, 66, .1); --accent-fg: #a9502f;
+  --ok: #4f8a4b; --ok-soft: rgba(79, 138, 75, .11); --ok-fg: #3b6e38;
+  --warn: #c8811a; --warn-soft: rgba(200, 129, 26, .12); --warn-fg: #8f5a0c;
+  --bad: #c0392b; --bad-soft: rgba(192, 57, 43, .09); --bad-fg: #a3291d;
+  --link: var(--accent-fg);
+  --r-sm: 6px; --r: 10px; --r-lg: 14px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI Variable", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e; --surface: #2c2c2e; --surface-2: #242426; --side: #232325; --fill: rgba(255, 255, 255, .07); --fill-2: rgba(255, 255, 255, .13);
+    --line: rgba(255, 255, 255, .1); --line-2: rgba(255, 255, 255, .18);
+    --fg: #f5f5f7; --fg-2: #d1d1d6; --muted: #98989d;
+    --accent: #d97757; --accent-hover: #e08a6c; --accent-soft: rgba(217, 119, 87, .16); --accent-fg: #e8957a;
+    --ok: #79b26f; --ok-soft: rgba(121, 178, 111, .14); --ok-fg: #9cc893;
+    --warn: #e0a043; --warn-soft: rgba(224, 160, 67, .15); --warn-fg: #ecbb6e;
+    --bad: #e5675a; --bad-soft: rgba(229, 103, 90, .15); --bad-fg: #f08b80;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 var(--font); letter-spacing: -.006em; color: var(--fg); background: var(--bg); -webkit-font-smoothing: antialiased; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 1px; }
+
+.logo { display: block; flex: none; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 14px; border: 0; border-radius: 8px; background: var(--fill); color: var(--fg); font: 500 13.5px/1.2 var(--font); cursor: pointer; text-align: center; text-decoration: none; transition: background .12s, filter .12s; }
+.btn:hover { background: var(--fill-2); text-decoration: none; }
+.btn:active { filter: brightness(.92); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.dark { background: var(--fg); color: var(--bg); }
+.btn.dark:hover { background: var(--fg-2); }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.danger { color: var(--bad-fg); }
+.btn.ghost { background: transparent; color: var(--accent-fg); }
+.btn.ghost:hover { background: var(--accent-soft); }
+
+/* Переключатель: во включённом состоянии цвет акцента. */
+.switch { appearance: none; width: 38px; height: 23px; margin: 0; border-radius: 999px; background: var(--fill-2); position: relative; cursor: pointer; flex: none; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, .15), 0 0 1px rgba(0, 0, 0, .2); transition: transform .2s cubic-bezier(.3, .7, .4, 1); }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(15px); }
+.switch:disabled { opacity: .4; cursor: not-allowed; }
+
+select, input:not([type]), input[type="text"], textarea { padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 8px; font: inherit; color: var(--fg); background: var(--surface); }
+select { padding-right: 26px; appearance: none; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 14'%3E%3Cpath d='M2 5l3-3 3 3M2 9l3 3 3-3' fill='none' stroke='%2373726c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 9px center / 8px 12px; cursor: pointer; }
+select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+input[type="checkbox"]:not(.switch) { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* Метка: спокойная серая капсула, красным только ключи и пароли. */
+.tok { display: inline-block; padding: 0 6px; border-radius: 5px; color: var(--fg-2); background: var(--fill); font: 500 12px/1.6 var(--mono); letter-spacing: 0; white-space: nowrap; }
+.tok-SECRET { color: var(--bad-fg); background: var(--bad-soft); }

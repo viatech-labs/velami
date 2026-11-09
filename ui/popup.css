@@ -1,0 +1,34 @@
+body { width: 340px; padding-bottom: 14px; }
+.top { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+.top .name b { display: block; font: 600 15px/1.2 var(--font); letter-spacing: -.01em; }
+.top .name span { display: block; color: var(--muted); font-size: 11.5px; }
+.top .power { margin-left: auto; display: flex; }
+.managed { display: flex; align-items: center; gap: 6px; margin: -4px 16px 10px; color: var(--muted); font-size: 11.5px; }
+.managed svg { flex: none; }
+
+.group { margin: 0 12px 10px; background: var(--surface); border-radius: var(--r-lg); overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+
+.status { display: flex; gap: 11px; align-items: center; padding: 11px 13px; --icon: var(--ok); }
+.status .icon { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--icon); }
+.status b { display: block; font: 600 14px/1.25 var(--font); }
+.status span:not(.icon) { display: block; font-size: 12px; color: var(--muted); }
+.status.off { --icon: var(--muted); }
+.status.warn { --icon: var(--warn); }
+.status.bad { --icon: var(--bad); }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); }
+.stat { padding: 10px 6px 9px; text-align: center; }
+.stat + .stat { box-shadow: inset 1px 0 0 var(--line); }
+.stat b { display: block; font: 600 20px/1.2 var(--font); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.stat span { display: block; font-size: 11px; line-height: 1.3; color: var(--muted); }
+.stat.hot b { color: var(--bad); }
+
+.list .row { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 8px 13px; border: 0; background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.list .row + .row::before { content: ""; position: absolute; top: 0; left: 13px; right: 0; height: 1px; background: var(--line); }
+.list .row small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--muted); }
+.list .row select { padding-top: 4px; padding-bottom: 4px; font-size: 13px; border-color: transparent; background-color: var(--fill); }
+.list .link:hover { background: var(--fill); }
+.list .link i { width: 7px; height: 7px; margin-right: 3px; border-top: 1.8px solid var(--line-2); border-right: 1.8px solid var(--line-2); transform: rotate(45deg); }
+
+.actions { padding: 2px 12px 0; }
+.actions .btn { width: 100%; min-height: 36px; border-radius: 10px; font-weight: 600; }

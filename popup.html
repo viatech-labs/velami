@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title data-i18n="brand.name"></title>
+  <link rel="stylesheet" href="ui/common.css">
+  <link rel="stylesheet" href="ui/popup.css">
+</head>
+<body>
+  <header class="top">
+    <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#df8462"/><stop offset="1" stop-color="#bd5a38"/></linearGradient></defs><rect width="32" height="32" rx="7.2" fill="url(#vg)"/><rect x="8" y="9" width="11" height="2.6" rx="1.3" fill="#fff" fill-opacity=".72"/><rect x="8" y="14.3" width="16" height="4.4" rx="2.2" fill="#fff"/><rect x="8" y="21.4" width="8" height="2.6" rx="1.3" fill="#fff" fill-opacity=".72"/></svg>
+    <div class="name"><b data-i18n="brand.name"></b><span id="version"></span></div>
+    <label class="power" data-i18n-title="popup.enabled"><input type="checkbox" id="enabled" class="switch"></label>
+  </header>
+
+  <p class="managed" id="managed" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 10h4a1 1 0 0 1 1 1v10M3 21h18M8 8h3M8 12h3M8 16h3"/></svg><span id="managed-text"></span></p>
+
+  <section class="group status" id="head">
+    <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.6 7.5 10 4.4-1.4 7.5-5.4 7.5-10V5.6z" fill="#fff"/><path d="m8.6 12.2 2.4 2.4 4.4-4.8" fill="none" stroke="var(--icon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <div><b id="title"></b><span id="subtitle"></span></div>
+  </section>
+
+  <section class="group stats">
+    <div class="stat"><b id="s-masked">0</b><span data-i18n="popup.masked"></span></div>
+    <div class="stat"><b id="s-requests">0</b><span data-i18n="popup.requests"></span></div>
+    <div class="stat" id="stat-alerts"><b id="s-alerts">0</b><span data-i18n="popup.alerts"></span></div>
+  </section>
+
+  <section class="group list">
+    <label class="row"><span data-i18n="popup.rehydrate"></span> <input type="checkbox" id="rehydrate" class="switch"></label>
+    <label class="row"><span><span data-i18n="popup.model"></span><small id="model-state"></small></span> <input type="checkbox" id="model" class="switch"></label>
+    <label class="row"><span data-i18n="lang.label"></span>
+      <select id="language">
+        <option value="auto" data-i18n="lang.auto"></option>
+        <option value="en">English</option>
+        <option value="it">Italiano</option>
+        <option value="ru">Русский</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="group list">
+    <button class="row link" data-open="log"><span data-i18n="panel.log"></span><i aria-hidden="true"></i></button>
+    <button class="row link" data-open="dict"><span data-i18n="panel.dict"></span><i aria-hidden="true"></i></button>
+  </section>
+
+  <footer class="actions">
+    <button class="btn primary" data-open="test" data-i18n="panel.test"></button>
+  </footer>
+  <script src="src/i18n.js"></script>
+  <script src="ui/popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Velami: private chats with AI"
+  },
+  "extShortName": {
+    "message": "Velami"
+  },
+  "extDescription": {
+    "message": "Hides personal data before it goes to ChatGPT, Claude, Gemini or Perplexity and shows exactly what left. Works locally, no servers."
+  }
+}

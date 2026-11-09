@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "properties": {
+    "organization": {
+      "title": "Organization name",
+      "description": "Shown to the user as 'Managed by <name>'.",
+      "type": "string"
+    },
+    "supportContact": {
+      "title": "Support contact",
+      "description": "E-mail, phone or intranet address shown when a policy blocks an action.",
+      "type": "string"
+    },
+    "enabled": {
+      "title": "Protection on",
+      "description": "true keeps protection always on, false keeps it off. Not set: the user decides.",
+      "type": "boolean"
+    },
+    "rehydrate": {
+      "title": "Show real values in answers",
+      "description": "Not set: the user decides.",
+      "type": "boolean"
+    },
+    "model": {
+      "title": "Name and address recognition model",
+      "description": "false turns the local model off, for example on computers with little memory. Not set: the user decides.",
+      "type": "boolean"
+    },
+    "askImages": {
+      "title": "Ask before sending images",
+      "description": "Not set: the user decides.",
+      "type": "boolean"
+    },
+    "language": {
+      "title": "Interface language",
+      "description": "auto follows the browser. Not set: the user decides.",
+      "type": "string",
+      "enum": ["auto", "en", "it", "ru"]
+    },
+    "dictionary": {
+      "title": "Organization dictionary",
+      "description": "Terms always hidden for every user: client names, projects, internal codes. Added to the personal dictionary, the user cannot remove them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "term": { "type": "string" },
+          "type": { "type": "string", "enum": ["PERSON", "ORG", "ADDRESS", "CUSTOM"] }
+        }
+      }
+    },
+    "allowExclusions": {
+      "title": "Allow leaving found data as is",
+      "description": "false: the user cannot untick a found value in the panel, every value is always hidden.",
+      "type": "boolean"
+    },
+    "allowOriginalFiles": {
+      "title": "Allow sending the original of a file with personal data",
+      "description": "false: for PDF and Office files with data found only the clean text copy can be sent.",
+      "type": "boolean"
+    },
+    "allowUncheckedFiles": {
+      "title": "Allow sending files that cannot be checked",
+      "description": "false: scans, images, password protected and unknown files are not sent.",
+      "type": "boolean"
+    }
+  }
+}
