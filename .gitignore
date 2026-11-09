@@ -1,0 +1,8 @@
+node_modules/
+dist/
+test/artifacts/
+.DS_Store
+.cache/
+.venv-model/
+models/
+vendor/

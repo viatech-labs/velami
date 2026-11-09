@@ -1,0 +1,41 @@
+{
+  "name": "velami",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension that hides personal data before it reaches AI chats and restores it in the answers",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22.2"
+  },
+  "author": "Via-Tech <info@via-tech.org> (https://via-tech.org)",
+  "homepage": "https://velami.pro",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viatech-labs/velami.git"
+  },
+  "bugs": "https://github.com/viatech-labs/velami/issues",
+  "scripts": {
+    "test": "node --test test/*.test.js test/*.test.mjs",
+    "e2e": "node test/e2e.mjs",
+    "e2e:sites": "node test/e2e-sites.mjs",
+    "e2e:files": "node test/e2e-files.mjs",
+    "e2e:policy": "node test/e2e-policy.mjs",
+    "setup": "node scripts/vendor.mjs",
+    "model": ".venv-model/bin/python tools/model/build_model.py",
+    "eval:model": "node test/model-eval.mjs",
+    "demo": "node tools/demo/record.mjs",
+    "demo:it": "node tools/demo/record.mjs --lang it",
+    "brochure": "node tools/brochure/build.mjs --lang it",
+    "brochure:ru": "node tools/brochure/build.mjs --lang ru",
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "icons": "node tools/icons/render.mjs",
+    "brand": "node tools/brand/render.mjs"
+  },
+  "devDependencies": {
+    "onnxruntime-web": "1.31.1",
+    "pdfjs-dist": "6.5.438",
+    "puppeteer": "^25.16.0",
+    "ws": "^8.22.2"
+  }
+}
