@@ -27,6 +27,7 @@
     "demo:it": "node tools/demo/record.mjs --lang it",
     "brochure": "node tools/brochure/build.mjs --lang it",
     "brochure:ru": "node tools/brochure/build.mjs --lang ru",
+    "store": "node tools/store/build.mjs",
     "build": "node scripts/build.mjs",
     "verify": "node scripts/verify.mjs",
     "icons": "node tools/icons/render.mjs",

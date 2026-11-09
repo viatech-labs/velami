@@ -97,6 +97,8 @@ Privacy policy URL: https://velami.pro/privacy
 
 ## Store listing
 
+Category: Make Chrome Yours → Privacy & Security.
+
 **EN · Velami: private chats with AI**
 
 Short description: Hides personal data before it is sent to ChatGPT, Claude, Gemini and Perplexity and
@@ -163,12 +165,18 @@ Description:
 Без серверов, учётных записей и аналитики. Всё остаётся на этом компьютере. Исходный код открыт
 (AGPL-3.0): github.com/viatech-labs/velami
 
-## Screenshots for the listing (1280×800)
+## Screenshots and promo tile
 
-`npm run e2e` writes them to `test/artifacts/`: `1-preview.png` (panel before sending),
-`2-answer.png` (answer with real values), `2b-tooltip.png` (tooltip over a value), `3-log.png`
-(log), `4-echo.png` (self-test). The English README screenshots in `docs/img/` come from
-`tools/brochure/shots.mjs` with `lang: 'en'`. All data in them is made up.
+`npm run store` writes the listing images to `dist/store/<en|it|ru>/`: five screenshots 1280×800
+with a caption (`1-panel.jpg` panel before sending, `2-answer.jpg` answer with real values,
+`3-file.jpg` cleaned file, `4-log.jpg` log, `5-echo.jpg` self-test) and the small promo tile
+`promo-440x280.jpg`. JPEG, because the store does not accept PNG with an alpha channel. Upload each
+language set to its localized listing. The screenshots come from real Chrome with the extension on a
+test copy of the chat page (`tools/brochure/shots.mjs`), all data in them is made up, and the build
+stops if the self-test lets a value through. `--no-shots` rebuilds the captions from the last capture.
+
+The English README screenshots in `docs/img/` come from the same `tools/brochure/shots.mjs` with
+`lang: 'en'`.
 
 Demo video: `npm run demo -- <unpacked zip>` records real Chrome with the package on a test copy of
 the chat page with made-up data, `dist/demo/velami-demo-ru.mp4` (subtitles burned in and as a

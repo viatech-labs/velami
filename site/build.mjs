@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 // Сборка velami.pro в dist/site: index.<lang>.html и privacy.<lang>.html для en/it/ru, стили, WebP-картинки.
 // Скриншоты снимаются из настоящего расширения (tools/brochure/shots.mjs) в /tmp/shots-<lang> или --shots <dir>.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, copyFileSync, existsSync } from 'node:fs';
@@ -19,6 +20,7 @@ const ORIGIN = 'https://velami.pro';
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('--shots', '/tmp/shots-{lang}');
 const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')).version;
+const PKG_SHA = (existsSync(path.join(ROOT, 'dist', `velami-${VERSION}.zip.sha256`)) ? readFileSync(path.join(ROOT, 'dist', `velami-${VERSION}.zip.sha256`), 'utf8') : '0'.repeat(64)).split(/\s/)[0];
 
 const NB = '\u00a0';
 const glue = (s) => {
@@ -26,7 +28,7 @@ const glue = (s) => {
   if (r.length < 90) r = r.replace(/ (\S{1,12})$/u, `${NB}$1`).replace(/ (\S{1,12})<br>/u, `${NB}$1<br>`);
   return r;
 };
-const typo = (v) => typeof v === 'string' ? glue(v) : Array.isArray(v) ? v.map(typo) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typo(x)]));
+const typo = (v) => v == null ? v : typeof v === 'string' ? glue(v) : Array.isArray(v) ? v.map(typo) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typo(x)]));
 const T = Object.fromEntries(LANGS.map((l) => [l, { ...typo(CONTENT[l]), title: CONTENT[l].title, description: CONTENT[l].description }]));
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const rich = (s) => esc(s).replace(/\[\[([A-Z_0-9]+)\]\]/g, '<code class="tok">[[$1]]</code>');
@@ -64,9 +66,8 @@ function head(t, lang, { title, description, canonical, og }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1f1e1d" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#eeeeef">
   <link rel="canonical" href="${ORIGIN}/${lang}/${canonical}">
   ${alt}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}/${canonical}">
@@ -84,22 +85,37 @@ function head(t, lang, { title, description, canonical, og }) {
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   ${og || ''}
-  <link rel="preload" href="/fonts/source-serif-4-${lang === 'ru' ? 'cyrillic' : 'latin'}.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/jost-${lang === 'ru' ? 'cyrillic' : 'latin'}.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css?v=${HASH}">
 </head>`;
 }
 
+// Мини-сцены к шагам: настоящий текст, найденный тем же детектором, что в расширении.
+function scenes(lang) {
+  const sc = CONTENT[lang].scene;
+  const r = PG.maskText(sc.msg, { vault: new PG.Vault() });
+  const values = Object.fromEntries(r.findings.map((f) => [f.token, f.value]));
+  let cur = 0;
+  let hot = '';
+  for (const f of r.findings) { hot += esc(sc.msg.slice(cur, f.start)) + `<mark class="hot">${esc(f.value)}</mark>`; cur = f.end; }
+  hot += esc(sc.msg.slice(cur));
+  const masked = esc(r.text).replace(/\[\[([A-Z_]+)_(\d+)\]\]/g, '<mark class="tok">[[$1_$2]]</mark>');
+  const back = esc(sc.answer).replace(/\[\[([A-Z_]+_\d+)\]\]/g, (m, k) => `<mark class="back">${esc(values['[[' + k + ']]'] || m)}</mark>`);
+  const card = (who, body, cls = '') => `<div class="scene ${cls}"><p class="scene-who">${esc(who)}</p><p class="scene-msg">${body}</p></div>`;
+  return [card(sc.you, hot), card(sc.ai, masked, 'scene-ai'), card(sc.back, back, 'scene-back')];
+}
+
 function header(t, lang, home = '') {
   return `<header class="top">
-  <div class="capsule">
+  <div class="wrap top-in">
     <a class="brand" href="/${home}" aria-label="Velami">${mark()}<span>Velami</span></a>
     <nav class="nav" aria-label="Velami">
       <a href="/#how">${esc(t.nav.how)}</a>
       <a href="/#check">${esc(t.nav.check)}</a>
       <a href="/#teams">${esc(t.nav.teams)}</a>
       <a href="/#faq">${esc(t.nav.faq)}</a>
+      <a class="nav-cta" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
     </nav>
-    <a class="btn btn-sm" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
   </div>
 </header>`;
 }
@@ -107,27 +123,23 @@ function header(t, lang, home = '') {
 function footer(t, lang) {
   return `<footer class="foot">
   <div class="wrap foot-in">
-    <div class="foot-brand">
-      <a class="brand" href="/">${mark()}<span>Velami</span></a>
-      <p>${esc(t.footer.tagline)}</p>
-    </div>
+    <a class="foot-brand" href="/">Velami</a>
+    <p class="foot-tag">${esc(t.footer.tagline)}</p>
+    <p class="foot-row"><span>E-mail: <a href="mailto:${MAIL}">${MAIL}</a></span><span><a href="${REPO}">${esc(t.footer.source)}</a></span><span>AGPL-3.0 · v${VERSION}</span></p>
     <nav class="foot-links">
+      <a href="/">Velami</a>
+      <a href="/#how">${esc(t.nav.how)}</a>
+      <a href="/#check">${esc(t.nav.check)}</a>
+      <a href="/#teams">${esc(t.nav.teams)}</a>
       <a href="/privacy">${esc(t.footer.privacy)}</a>
-      <a href="${REPO}">${esc(t.footer.source)}</a>
-      <a href="mailto:${MAIL}">${esc(t.footer.support)}</a>
     </nav>
-    <div class="foot-meta">
-      <p>${esc(t.footer.made)} <a href="https://via-tech.org">Via-Tech</a> · v${VERSION} · AGPL-3.0</p>
-      <p>${esc(t.footer.clean)}</p>
-    </div>
+    <p class="foot-meta">${esc(t.footer.made)} <a href="https://via-tech.org">Via-Tech</a>. ${esc(t.footer.clean)}</p>
   </div>
 </footer>`;
 }
 
-function picture(lang, name, alt, { dark, w, h, cls = '', eager = false } = {}) {
-  const src = `/img/${lang}/${name}.webp`;
-  const d = dark ? `<source srcset="/img/${lang}/${dark}.webp" media="(prefers-color-scheme: dark)">` : '';
-  return `<picture class="${cls}">${d}<img src="${src}" alt="${esc(alt)}" width="${w}" height="${h}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></picture>`;
+function picture(lang, name, alt, { w, h, cls = '', eager = false } = {}) {
+  return `<img class="${cls}" src="/img/${lang}/${name}.webp" alt="${esc(alt)}" width="${w}" height="${h}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`;
 }
 
 // Первый кадр демо считаем при сборке тем же детектором, чтобы без JS страница выглядела так же.
@@ -137,14 +149,14 @@ function demoBlock(t, lang) {
   const r = PG.maskText(sample, { vault: new PG.Vault() });
   const outHtml = esc(r.text).replace(/\[\[([A-Z_]+)_(\d+)\]\]/g, '<mark class="tok">[[$1_$2]]</mark>');
   const chips = r.findings.map((f) => `<li><span>${esc(labels[f.type] || f.type)}</span><code>${esc(f.token)}</code></li>`).join('');
-  return `<div class="demo" id="demo" data-labels="${esc(JSON.stringify(labels))}" data-count="${esc(t.demo.count)}" data-none="${esc(t.demo.none)}">
+  return `<div class="demo reveal" id="demo" data-labels="${esc(JSON.stringify(labels))}" data-count="${esc(t.demo.count)}" data-none="${esc(t.demo.none)}">
         <div class="pane">
-          <div class="pane-h"><span class="pane-dot"></span>${esc(t.demo.you)}</div>
+          <div class="pane-h">${esc(t.demo.you)}</div>
           <label class="sr" for="demo-in">${esc(t.demo.you)}</label>
           <textarea id="demo-in" spellcheck="false" rows="4">${esc(sample)}</textarea>
         </div>
         <div class="pane pane-out">
-          <div class="pane-h"><span class="pane-dot pane-dot-on"></span>${esc(t.demo.ai)}<span class="count on" id="demo-count">${esc(t.demo.count.replace('{n}', r.findings.length))}</span></div>
+          <div class="pane-h">${esc(t.demo.ai)}<span class="count on" id="demo-count">${esc(t.demo.count.replace('{n}', r.findings.length))}</span></div>
           <div class="out" id="demo-out" aria-live="polite">${outHtml}</div>
           <ul class="found" id="demo-found">${chips}</ul>
         </div>
@@ -154,23 +166,36 @@ function demoBlock(t, lang) {
 
 function index(lang) {
   const t = T[lang];
+  const sc = scenes(lang);
   const steps = t.how.steps.map(([h, p], i) => `
-          <li>
-            <span class="num">${i + 1}</span>
-            <div><h3>${esc(h)}</h3><p>${rich(p)}</p></div>
-          </li>`).join('');
+      <article class="svc reveal">
+        <div class="svc-art">${sc[i]}</div>
+        <div class="svc-text">
+          <p class="svc-n">0${i + 1}</p>
+          <h3>${esc(h)}</h3>
+          <p>${rich(p)}</p>
+        </div>
+      </article>`).join('');
   const chips = t.types.list.map((x) => `<li>${esc(x)}</li>`).join('');
-  const checks = t.check.cards.map(([h, p], i) => `
-        <li>
-          ${icon(['eye', 'log', 'flask', 'code'][i])}
+  const pr = CONTENT[lang].proof;
+  const toks = (x) => esc(x).replace(/\[\[([A-Z_]+_\d+)\]\]/g, '<mark class="tok">[[$1]]</mark>');
+  const logSha = createHash('sha256').update(pr.logText).digest('hex');
+  const shots = [
+    `<div class="mock"><p class="mock-h">${esc(pr.panel)}</p><ul class="mock-list">${pr.items.map(([v, k]) => `<li class="${k ? 'on' : 'off'}"><span class="box"></span><span class="v">${esc(v)}</span>${k ? `<mark class="tok">${esc(k)}</mark>` : `<small>${esc(pr.keep)}</small>`}</li>`).join('')}</ul></div>`,
+    `<div class="mock"><p class="mock-h">${esc(pr.log)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-sha">SHA-256 ${logSha.slice(0, 24)}…</p></div>`,
+    `<div class="mock"><p class="mock-h">${esc(pr.echo)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-ok">✓ ${esc(pr.echoOk)}</p></div>`,
+    `<pre class="term"><code><span class="dim">$</span> shasum -a 256 velami-${VERSION}.zip\n${PKG_SHA.slice(0, 40)}…\n<span class="dim">$</span> npm run verify\n<span class="ok">✓ 210 files match the sources</span></code></pre>`,
+  ];
+  const philo = t.check.cards.map(([h, p], i) => `
+        <article class="proof proof-${i + 1} reveal">
+          <div class="proof-img">${shots[i]}</div>
           <h3>${esc(h)}</h3>
           <p>${esc(p)}</p>
-        </li>`).join('');
-  const teams = t.teams.cards.map(([h, p], i) => `
-        <li>
-          ${icon(['book', 'lock', 'file'][i])}
-          <h3>${esc(h)}</h3>
+        </article>`).join('');
+  const teams = t.teams.cards.map(([h, p]) => `
+        <li class="quote reveal">
           <p>${esc(p)}</p>
+          <h3>${esc(h)}</h3>
         </li>`).join('');
   const faq = t.faq.items.map(([q, a]) => `
         <details>
@@ -192,109 +217,113 @@ function index(lang) {
 ${header(t, lang)}
 <main>
   <section class="hero">
-    <div class="wrap">
-      <div class="hero-text">
-        <p class="eyebrow">${esc(t.hero.eyebrow)}</p>
-        <h1>${t.hero.title}</h1>
-        <p class="lead">${esc(t.hero.lead)}</p>
-        <div class="ctas">
-          <a class="btn" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
-          <a class="btn btn-ghost" href="${REPO}">${icon('gh')}${esc(t.hero.source)}</a>
-        </div>
-        <p class="note">${esc(t.hero.note)}</p>
-      </div>
-      <p class="kicker">${esc(t.demo.label)}</p>
-      ${demoBlock(t, lang)}
-    </div>
-  </section>
-
-  <section id="how" class="sec">
-    <div class="wrap how">
-      <div class="how-text">
-        <h2>${esc(t.how.title)}</h2>
-        <p class="sub">${esc(t.how.lead)}</p>
-        <ol class="steps">${steps}
-        </ol>
-      </div>
-      <div class="how-shot">
-        ${picture(lang, 'panel', t.hero.alt, { dark: 'panel-dark', w: 678, h: 1024 })}
-      </div>
-    </div>
-    <div class="wrap">
-      <figure class="frame">
-        ${picture(lang, 'answer', t.how.alt, { w: 1720, h: 880 })}
-      </figure>
-    </div>
-  </section>
-
-  <section id="types" class="sec sec-tint">
-    <div class="wrap center-block">
-      <h2>${esc(t.types.title)}</h2>
-      <p class="sub">${esc(t.types.lead)}</p>
-      <ul class="chips">${chips}</ul>
-    </div>
-  </section>
-
-  <section id="check" class="sec">
-    <div class="wrap">
-      <div class="sec-head">
-        <h2>${esc(t.check.title)}</h2>
-        <p class="sub">${esc(t.check.lead)}</p>
-      </div>
-      <ul class="cols">${checks}
-      </ul>
-      <figure class="frame">
-        ${picture(lang, 'log', t.check.alt, { dark: 'log-dark', w: 1600, h: 1000 })}
-      </figure>
-    </div>
-  </section>
-
-  <section class="sec sec-tint">
-    <div class="wrap duo">
-      <div>
-        <h2>${esc(t.files.title)}</h2>
-        <p class="sub">${esc(t.files.text)}</p>
-      </div>
-      <div>
-        <h2>${esc(t.sites.title)}</h2>
-        <p class="sub">${esc(t.sites.text)}</p>
-        <ul class="sites">${sites}</ul>
-      </div>
-    </div>
-  </section>
-
-  <section id="teams" class="sec">
-    <div class="wrap">
-      <div class="teams">
-        <div class="teams-head">
-          <h2>${esc(t.teams.title)}</h2>
-          <p>${esc(t.teams.lead)}</p>
-        </div>
-        <ul class="teams-grid">${teams}
-        </ul>
-        <div class="ctas">
-          <a class="btn btn-light" href="mailto:${MAIL}?subject=Velami">${icon('mail')}${esc(t.teams.cta)}</a>
-          <a class="btn btn-ghost-light" href="${REPO}/blob/main/docs/ENTERPRISE.md">${esc(t.teams.guide)}${icon('arrow')}</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="faq" class="sec">
-    <div class="wrap faq-wrap">
-      <h2>${esc(t.faq.title)}</h2>
-      <div class="faq">${faq}
-      </div>
-    </div>
-  </section>
-
-  <section class="sec final">
-    <div class="wrap center-block">
-      ${mark('mark mark-lg')}
-      <h2>${t.hero.title}</h2>
+    <img class="hero-photo" src="/img/photo-hero.webp" alt="" width="2048" height="1152" fetchpriority="high" decoding="async">
+    <div class="wrap hero-in">
+      <h1>${t.hero.title}</h1>
+      <p class="hero-sub">${esc(t.hero.lead)}</p>
       <div class="ctas">
-        <a class="btn" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
-        <a class="btn btn-ghost" href="${REPO}">${icon('gh')}${esc(t.hero.source)}</a>
+        <a class="btn btn-light" href="${DOWNLOAD}">${esc(t.hero.cta)}</a>
+        <a class="btn btn-line-light" href="${REPO}">${esc(t.hero.source)}</a>
+      </div>
+      <p class="hero-note">${esc(t.hero.eyebrow)}. ${esc(t.hero.note)}</p>
+    </div>
+  </section>
+
+    <section id="who" class="sec">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.who.title)}</h2>
+        <p class="lead reveal">${esc(t.who.lead)}</p>
+        <div class="whos">${t.who.cards.map(([h, p, eg]) => `
+          <article class="who reveal">
+            <h3>${esc(h)}</h3>
+            <p>${esc(p)}</p>
+            <p class="who-eg"><span>${esc(t.who.eg)}</span>${esc(eg)}</p>
+          </article>`).join('')}
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="sec">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.how.title)}</h2>
+        <p class="lead reveal">${esc(t.how.lead)}</p>
+      </div>
+      <div class="wrap svcs">${steps}
+      </div>
+    </section>
+
+    <section id="demo-sec" class="sec sec-tight">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.demo.label)}</h2>
+        ${demoBlock(t, lang)}
+      </div>
+    </section>
+
+  <section id="check" class="dark">
+    <div class="wrap">
+      <h2 class="reveal">${esc(t.check.title)}</h2>
+      <p class="dark-lead reveal">${esc(t.check.lead)}</p>
+      <div class="proofs">${philo}
+      </div>
+    </div>
+  </section>
+
+    <section class="sec">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.rows.title)}</h2>
+        <div class="row reveal">
+          <div class="row-text">
+            <h3 class="row-h">${esc(t.rows.msg)}</h3>
+            <p>${esc(t.types.lead)}</p>
+            <ul class="chips">${chips}</ul>
+          </div>
+          <div class="row-img row-img-panel">${picture(lang, 'panel', t.hero.alt, { w: 678, h: 1024 })}</div>
+        </div>
+        <div class="row row-flip reveal">
+          <div class="row-text">
+            <h3 class="row-h">${esc(t.rows.files)}</h3>
+            <p>${esc(t.files.text)}</p>
+            <h3 class="row-h row-h2">${esc(t.rows.sites)}</h3>
+            <p>${esc(t.sites.text)}</p>
+            <ul class="sites">${sites}</ul>
+          </div>
+          <div class="row-img">${picture(lang, 'log', t.check.alt, { w: 1600, h: 1000 })}</div>
+        </div>
+        <div class="row-wide reveal">${picture(lang, 'answer', t.how.alt, { w: 1720, h: 880 })}</div>
+      </div>
+    </section>
+
+    <section id="teams" class="sec">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.teams.title)}</h2>
+        <p class="lead reveal">${esc(t.teams.lead)}</p>
+        <ul class="quotes">${teams}
+        </ul>
+        <div class="ctas reveal">
+          <a class="btn btn-dark" href="mailto:${MAIL}?subject=Velami">${esc(t.teams.cta)}</a>
+          <a class="btn btn-line" href="${REPO}/blob/main/docs/ENTERPRISE.md">${esc(t.teams.guide)}</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="sec">
+      <div class="wrap">
+        <h2 class="reveal">${esc(t.faq.title)}</h2>
+        <div class="faq reveal">${faq}
+        </div>
+      </div>
+    </section>
+
+  <section class="band">
+    <img class="band-photo" src="/img/photo-desk.webp" alt="" width="2048" height="1152" loading="lazy" decoding="async">
+    <div class="wrap band-in">
+      <div class="band-text">
+        <h2>${esc(t.final.title)}</h2>
+        <p>${esc(t.final.text)}</p>
+        <div class="ctas">
+          <a class="btn btn-light" href="${DOWNLOAD}">${esc(t.hero.cta)}</a>
+          <a class="btn btn-line-light" href="mailto:${MAIL}">${esc(t.final.ask)}</a>
+        </div>
       </div>
     </div>
   </section>
@@ -391,6 +420,8 @@ async function main() {
   for (const f of readdirSync(path.join(SRC, 'fonts')).filter((x) => x.endsWith('.woff2'))) copyFileSync(path.join(SRC, 'fonts', f), path.join(OUT, 'fonts', f));
   copyFileSync(path.join(ROOT, 'src', 'detector.js'), path.join(OUT, 'detector.js'));
   copyFileSync(path.join(SRC, 'demo.js'), path.join(OUT, 'demo.js'));
+  webp(path.join(SRC, 'photos', 'hero.jpg'), path.join(OUT, 'img', 'photo-hero.webp'));
+  webp(path.join(SRC, 'photos', 'desk.jpg'), path.join(OUT, 'img', 'photo-desk.webp'));
   const { createHash } = await import('node:crypto');
   HASH = createHash('sha256').update(css).update(readFileSync(path.join(SRC, 'demo.js'))).update(readFileSync(path.join(ROOT, 'src', 'detector.js'))).digest('hex').slice(0, 10);
   writeFileSync(path.join(OUT, 'style.css'), css);
@@ -406,7 +437,7 @@ async function main() {
     const shots = SHOTS.replace('{lang}', lang);
     const dir = path.join(OUT, 'img', lang);
     mkdirSync(dir, { recursive: true });
-    const need = { panel: ['panel-alpha.png'], 'panel-dark': ['panel-dark-alpha.png'], answer: ['answer.png', 1720], log: ['log.png', 1600], 'log-dark': ['log-dark.png', 1600] };
+    const need = { panel: ['panel-alpha.png'], answer: ['answer.png', 1720], log: ['log.png', 1600] };
     for (const [name, [file, w]] of Object.entries(need)) {
       const src = path.join(shots, file);
       if (!existsSync(src)) throw new Error(`нет скриншота ${src}`);

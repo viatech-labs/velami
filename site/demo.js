@@ -1,6 +1,15 @@
 /* Живое демо на velami.pro: тот же detector.js, что в расширении, только правила, без модели. */
 (function () {
   'use strict';
+  var reveal = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window && reveal.length) {
+    document.documentElement.classList.add('js');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    reveal.forEach(function (n) { io.observe(n); });
+  }
+
   var root = document.getElementById('demo');
   if (!root || !window.PG) return;
   var input = document.getElementById('demo-in');

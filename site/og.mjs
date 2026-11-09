@@ -12,20 +12,25 @@ export async function renderOg(out, langs) {
     await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 });
     for (const lang of langs) {
       const t = CONTENT[lang];
-      const panel = 'data:image/webp;base64,' + readFileSync(path.join(out, 'img', lang, 'panel.webp')).toString('base64');
+      const b64 = (f) => readFileSync(path.join(out, f)).toString('base64');
+      const latin = b64('fonts/jost-latin.woff2');
+      const cyr = b64('fonts/jost-cyrillic.woff2');
+      const photo = 'data:image/webp;base64,' + b64('img/photo-hero.webp');
       await page.setContent(`<!doctype html><html><head><style>
-        body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #faf9f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1f1e1d; }
-        .g { position: absolute; right: -160px; top: -120px; width: 820px; height: 820px; background: radial-gradient(closest-side, rgba(201,100,66,.16), transparent 70%); }
-        .t { position: absolute; left: 80px; top: 84px; width: 640px; }
-        .b { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 650; letter-spacing: -.01em; }
-        .b svg { width: 48px; height: 48px; }
-        h1 { margin: 56px 0 24px; font-family: Georgia, serif; font-size: 60px; line-height: 1.05; letter-spacing: -.02em; font-weight: 500; } em { font-style: italic; color: #c96442; }
-        p { margin: 0; font-size: 25px; line-height: 1.4; color: #5f5d58; }
-        .u { position: absolute; left: 80px; bottom: 64px; font-size: 22px; color: #a9502f; font-weight: 600; }
-        img { position: absolute; right: 70px; top: 54px; width: 360px; filter: drop-shadow(0 30px 40px rgba(31,30,29,.18)); }
-      </style></head><body><div class="g"></div>
-        <div class="t"><div class="b">${mark}<span>Velami</span></div><h1>${t.hero.title}</h1><p>${t.hero.eyebrow.split('·')[1].trim().replace(/^./, (c) => c.toUpperCase())}</p></div>
-        <div class="u">velami.pro</div><img src="${panel}"></body></html>`, { waitUntil: 'load' });
+        @font-face { font-family: Jost; src: url(data:font/woff2;base64,${latin}) format('woff2'); font-weight: 200 600; }
+        @font-face { font-family: Jost; src: url(data:font/woff2;base64,${cyr}) format('woff2'); font-weight: 200 600; unicode-range: U+0400-04FF; }
+        body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #0e0e0e; font-family: Jost, sans-serif; color: #eeeeef; }
+        .p { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% 50%; opacity: .7; }
+        .s { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,14,14,.95) 0%, rgba(14,14,14,.7) 50%, rgba(14,14,14,.15) 85%); }
+        .t { position: absolute; left: 80px; top: 76px; width: 820px; }
+        .b { display: flex; align-items: center; gap: 14px; font-size: 32px; font-weight: 400; }
+        .b svg { width: 44px; height: 44px; }
+        h1 { margin: 88px 0 0; font-size: 72px; line-height: 1.1; font-weight: 300; } em { font-style: normal; color: #e2967a; }
+        .u { position: absolute; left: 80px; bottom: 64px; font-size: 24px; color: #a3a2a0; }
+      </style></head><body><img class="p" src="${photo}"><div class="s"></div>
+        <div class="t"><div class="b">${mark}<span>Velami</span></div><h1>${t.hero.title}</h1></div>
+        <div class="u">velami.pro</div></body></html>`, { waitUntil: 'load' });
+      await page.evaluate(() => document.fonts.ready);
       await page.screenshot({ path: path.join(out, 'img', `og-${lang}.png`) });
     }
   } finally {

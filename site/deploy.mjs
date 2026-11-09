@@ -109,4 +109,7 @@ if (process.argv.includes('--dry-run')) {
 } else {
   execFileSync('kubectl', ['apply', '--server-side', '--field-manager=velami-deploy', '-f', out], { stdio: 'inherit' });
   execFileSync('kubectl', ['-n', NS, 'rollout', 'status', 'deploy/velami-site', '--timeout=180s'], { stdio: 'inherit' });
+  const live = execFileSync('kubectl', ['-n', NS, 'get', 'configmap', '-l', 'app.kubernetes.io/name=velami-site', '-o', 'name'], { encoding: 'utf8' }).split('\n');
+  const stale = live.filter((n) => /^configmap\/velami-site-\d+$/.test(n) && Number(n.split('-').pop()) >= groups.length);
+  if (stale.length) execFileSync('kubectl', ['-n', NS, 'delete', ...stale], { stdio: 'inherit' });
 }

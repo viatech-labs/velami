@@ -11,10 +11,13 @@ export const CONTENT = {
     description: 'Velami hides names, card numbers, IBANs and passwords before your message reaches ChatGPT, Claude, Gemini or Perplexity, and shows the real values in the answer. Free, open source, runs on your computer.',
     nav: { how: 'How it works', check: 'Transparency', teams: 'For teams', faq: 'FAQ', cta: 'Download' },
     hero: {
+      lines: ['Names', 'Card numbers', 'Passwords'],
+      sub: 'stay with you. The AI only gets labels.',
       eyebrow: 'Chrome extension · free and open source',
-      title: 'Talk to AI.<br><em>Keep your data to yourself.</em>',
+      title: 'The AI gets your question.<br><em>Not your data.</em>',
       lead: 'Velami hides names, card numbers, IBANs and passwords before your message reaches ChatGPT, Claude, Gemini or Perplexity. The answer comes back with the real values. Everything happens on your computer.',
       cta: 'Download for Chrome',
+      code: 'Check the package yourself',
       source: 'View the source',
       note: 'Coming soon to the Chrome Web Store.',
       alt: 'Velami panel showing what the AI will receive',
@@ -27,6 +30,17 @@ export const CONTENT = {
       none: 'Nothing to hide yet',
       note: 'This box runs the same rules as the extension, right in this page. Nothing is sent anywhere. In the extension a local model also finds names and addresses.',
       sample: 'Hi, help me write to my bank. My card 4111 1111 1111 1111 was stolen. IBAN GB82 WEST 1234 5698 7654 32, email john.carter@example.com, phone +44 20 7946 0958.',
+    },
+    who: {
+      title: 'Who it’s for',
+      lead: 'Anyone who asks AI about personal or work matters and doesn’t want their data sitting on someone else’s servers.',
+      eg: 'For example',
+      cards: [
+        ['For yourself', 'A letter to your bank, a question for your doctor, a rental contract. The AI helps, your card and ID stay with you.', 'statements, test results, contracts'],
+        ['Accountants and lawyers', 'Work through client documents with AI without exposing names, tax IDs or bank accounts.', 'invoices, tax returns, case files'],
+        ['Developers', 'API keys, passwords and tokens are removed from code and logs before they leave your browser.', 'configs, logs, .env files'],
+        ['Companies', 'Your team uses AI every day. Velami keeps client data from leaving along with the question.', 'CRM exports, emails, reports'],
+      ],
     },
     how: {
       title: 'Nothing changes in the way you chat',
@@ -43,6 +57,9 @@ export const CONTENT = {
       lead: 'Numbers are matched by format and checksum, so a random number is not mistaken for a card. Names and addresses are found by a compact AI model that ships with the extension and runs offline.',
       list: ['Names', 'Addresses', 'Bank cards', 'IBAN', 'Phone numbers', 'E-mail', 'Tax codes', 'Passports and ID cards', 'Dates of birth', 'Car plates', 'API keys', 'Passwords', 'IP addresses', 'Your own words'],
     },
+    rows: { title: 'What Velami hides', msg: 'In every message', files: 'In attached files', sites: 'On the sites you use' },
+    proof: { panel: 'What the AI will see', items: [['John Carter', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Milan', null]], keep: 'stays as is', log: 'Sent to chatgpt.com', logText: 'My card [[CARD_1]] was stolen. Write to [[EMAIL_1]]', echo: 'Server received', echoOk: 'No hidden value reached the server' },
+    scene: { you: 'You write', ai: 'The AI receives', back: 'You see', msg: 'My card 4111 1111 1111 1111 was stolen. Write to john.carter@example.com', answer: 'I will draft a letter about card [[CARD_1]] and send it to [[EMAIL_1]].' },
     check: {
       title: 'No need to trust us. Check.',
       lead: 'Privacy tools usually ask for faith. Velami shows its work.',
@@ -84,6 +101,7 @@ export const CONTENT = {
         ['Will it slow me down?', 'A short message is checked in less than half a second. The model takes about 250 MB of memory while loaded and unloads itself after five minutes of rest.'],
       ],
     },
+    final: { title: 'Ready to try it?', text: 'Velami installs in a minute. Free and open source.', ask: 'Write to us' },
     footer: {
       tagline: 'Talk to AI. Keep your data.',
       made: 'Made by',
@@ -101,10 +119,13 @@ export const CONTENT = {
     description: 'Velami nasconde nomi, numeri di carta, IBAN e password prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity, e nella risposta mostra i valori reali. Gratuito, open source, funziona sul tuo computer.',
     nav: { how: 'Come funziona', check: 'Trasparenza', teams: 'Per le aziende', faq: 'Domande', cta: 'Scarica' },
     hero: {
+      lines: ['Nomi', 'Numeri di carta', 'Password'],
+      sub: 'restano con te. All’IA arrivano solo etichette.',
       eyebrow: 'Estensione per Chrome · gratuita e open source',
-      title: 'Parla con l’IA.<br><em>I tuoi dati restano tuoi.</em>',
+      title: 'L’IA riceve la domanda.<br><em>Non i tuoi dati.</em>',
       lead: 'Velami nasconde nomi, numeri di carta, IBAN e password prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity. La risposta torna con i valori reali. Tutto succede sul tuo computer.',
       cta: 'Scarica per Chrome',
+      code: 'Verifica tu il pacchetto',
       source: 'Guarda il codice',
       note: 'Presto anche sul Chrome Web Store.',
       alt: 'Il pannello di Velami mostra cosa riceverà l’IA',
@@ -117,6 +138,17 @@ export const CONTENT = {
       none: 'Ancora niente da nascondere',
       note: 'Questo riquadro usa le stesse regole dell’estensione, direttamente in questa pagina. Non viene inviato nulla. Nell’estensione un modello locale trova anche nomi e indirizzi.',
       sample: 'Ciao, aiutami a scrivere alla banca. Mi hanno rubato la carta 4111 1111 1111 1111. IBAN IT60 X054 2811 1010 0000 0123 456, codice fiscale RSSMRA85T10A562S, mail mario.rossi@example.com.',
+    },
+    who: {
+      title: 'Per chi è',
+      lead: 'Per chi chiede all’IA cose personali o di lavoro e non vuole lasciare i propri dati sui server di altri.',
+      eg: 'Per esempio',
+      cards: [
+        ['Per te', 'Una lettera alla banca, una domanda al medico, un contratto d’affitto. L’IA ti aiuta, la carta e i documenti restano tuoi.', 'estratti conto, analisi, contratti'],
+        ['Commercialisti e avvocati', 'Lavori sui documenti dei clienti con l’IA senza mostrare nomi, codici fiscali e conti.', 'fatture, dichiarazioni, pratiche'],
+        ['Sviluppatori', 'Chiavi API, password e token spariscono da codice e log prima di uscire dal browser.', 'config, log, file .env'],
+        ['Aziende', 'Il team usa l’IA ogni giorno. Velami evita che i dati dei clienti escano insieme alla domanda.', 'export dal CRM, email, report'],
+      ],
     },
     how: {
       title: 'In chat non cambia niente',
@@ -133,6 +165,9 @@ export const CONTENT = {
       lead: 'I numeri vengono riconosciuti per formato e cifra di controllo, così un numero qualsiasi non viene scambiato per una carta. Nomi e indirizzi li trova un piccolo modello di IA incluso nell’estensione, che funziona offline.',
       list: ['Nomi', 'Indirizzi', 'Carte bancarie', 'IBAN', 'Telefoni', 'E-mail', 'Codice fiscale e P. IVA', 'Documenti d’identità', 'Date di nascita', 'Targhe', 'Chiavi API', 'Password', 'Indirizzi IP', 'Le tue parole'],
     },
+    rows: { title: 'Cosa nasconde Velami', msg: 'In ogni messaggio', files: 'Nei file allegati', sites: 'Sui siti che usi' },
+    proof: { panel: 'Cosa vedrà l’IA', items: [['Mario Rossi', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Milano', null]], keep: 'resta com’è', log: 'Inviato a chatgpt.com', logText: 'Mi hanno rubato la carta [[CARD_1]]. Scrivi a [[EMAIL_1]]', echo: 'Il server ha ricevuto', echoOk: 'Nessun dato nascosto è arrivato al server' },
+    scene: { you: 'Tu scrivi', ai: 'L’IA riceve', back: 'Tu vedi', msg: 'Mi hanno rubato la carta 4111 1111 1111 1111. Scrivi a mario.rossi@example.com', answer: 'Preparo una lettera sulla carta [[CARD_1]] e la mando a [[EMAIL_1]].' },
     check: {
       title: 'Non devi fidarti. Verifica.',
       lead: 'Gli strumenti per la privacy di solito chiedono fiducia. Velami ti mostra cosa fa.',
@@ -174,6 +209,7 @@ export const CONTENT = {
         ['Mi rallenta?', 'Un messaggio breve viene controllato in meno di mezzo secondo. Il modello occupa circa 250 MB di memoria mentre è caricato e si scarica da solo dopo cinque minuti di pausa.'],
       ],
     },
+    final: { title: 'Vuoi provarlo?', text: 'Velami si installa in un minuto. Gratuito e open source.', ask: 'Scrivici' },
     footer: {
       tagline: 'Parla con l’IA. I tuoi dati restano tuoi.',
       made: 'Realizzato da',
@@ -191,10 +227,13 @@ export const CONTENT = {
     description: 'Velami скрывает имена, номера карт, IBAN и пароли до того, как сообщение уйдёт в ChatGPT, Claude, Gemini или Perplexity, и показывает в ответе настоящие значения. Бесплатно, открытый код, работает на вашем компьютере.',
     nav: { how: 'Как это работает', check: 'Прозрачность', teams: 'Для компаний', faq: 'Вопросы', cta: 'Скачать' },
     hero: {
+      lines: ['Имена', 'Номера карт', 'Пароли'],
+      sub: 'остаются у вас. ИИ получает только метки.',
       eyebrow: 'Расширение для Chrome · бесплатно, открытый код',
-      title: 'Пишите ИИ.<br><em>Данные остаются у вас.</em>',
+      title: 'ИИ получает вопрос.<br><em>Но не ваши данные.</em>',
       lead: 'Velami скрывает имена, номера карт, IBAN и пароли до того, как сообщение уйдёт в ChatGPT, Claude, Gemini или Perplexity. Ответ возвращается с настоящими значениями. Всё происходит на вашем компьютере.',
       cta: 'Скачать для Chrome',
+      code: 'Проверьте пакет сами',
       source: 'Исходный код',
       note: 'Скоро в Chrome Web Store.',
       alt: 'Панель Velami показывает, что получит ИИ',
@@ -207,6 +246,17 @@ export const CONTENT = {
       none: 'Пока скрывать нечего',
       note: 'Здесь работают те же правила, что в расширении, прямо на этой странице. Ничего никуда не отправляется. В расширении имена и адреса дополнительно находит локальная модель.',
       sample: 'Помоги написать в банк. Меня зовут Анна Сергеевна Миронова, карта 4111 1111 1111 1111 пропала. Почта anna.mironova@example.com, телефон +7 921 123-45-67.',
+    },
+    who: {
+      title: 'Кому это нужно',
+      lead: 'Всем, кто спрашивает ИИ о личном или рабочем и не хочет оставлять свои данные на чужих серверах.',
+      eg: 'Например',
+      cards: [
+        ['Для себя', 'Письмо в банк, вопрос врачу, договор аренды. ИИ поможет, а номер карты и паспорт останутся у вас.', 'выписки, анализы, договоры'],
+        ['Бухгалтерам и юристам', 'Разбирайте документы клиентов вместе с ИИ и не раскрывайте их имена, ИНН и счета.', 'счета, декларации, иски'],
+        ['Разработчикам', 'Ключи API, пароли и токены вырезаются из кода и логов до того, как покинут браузер.', 'конфиги, логи, файлы .env'],
+        ['Компаниям', 'Сотрудники пользуются ИИ каждый день. Velami не даёт данным клиентов уйти вместе с вопросом.', 'выгрузки из CRM, письма, отчёты'],
+      ],
     },
     how: {
       title: 'В чате ничего не меняется',
@@ -223,6 +273,9 @@ export const CONTENT = {
       lead: 'Номера проверяются по формату и контрольной сумме, поэтому случайное число не примут за карту. Имена и адреса находит небольшая модель ИИ, которая входит в расширение и работает без интернета.',
       list: ['Имена', 'Адреса', 'Банковские карты', 'IBAN', 'Телефоны', 'E-mail', 'ИНН и СНИЛС', 'Паспорта и удостоверения', 'Даты рождения', 'Госномера', 'API-ключи', 'Пароли', 'IP-адреса', 'Ваши слова'],
     },
+    rows: { title: 'Что скрывает Velami', msg: 'В каждом сообщении', files: 'Во вложенных файлах', sites: 'На сайтах, где вы общаетесь' },
+    proof: { panel: 'Что увидит ИИ', items: [['Анна Миронова', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Москва', null]], keep: 'останется как есть', log: 'Отправлено на chatgpt.com', logText: 'Украли карту [[CARD_1]]. Напиши на [[EMAIL_1]]', echo: 'Сервер получил', echoOk: 'Ни одно скрытое значение до сервера не дошло' },
+    scene: { you: 'Вы пишете', ai: 'ИИ получает', back: 'Вы видите', msg: 'Украли карту 4111 1111 1111 1111. Напиши на anna.mironova@example.com', answer: 'Подготовлю письмо про карту [[CARD_1]] и отправлю на [[EMAIL_1]].' },
     check: {
       title: 'Верить на слово не нужно. Проверьте.',
       lead: 'Инструменты для приватности обычно просят доверия. Velami показывает, что делает.',
@@ -264,6 +317,7 @@ export const CONTENT = {
         ['Он не будет тормозить?', 'Короткое сообщение проверяется меньше чем за полсекунды. Пока модель загружена, она занимает около 250 МБ памяти и выгружается сама после пяти минут простоя.'],
       ],
     },
+    final: { title: 'Готовы попробовать?', text: 'Velami ставится за минуту. Бесплатно и с открытым кодом.', ask: 'Написать нам' },
     footer: {
       tagline: 'Пишите ИИ. Данные остаются у вас.',
       made: 'Разработка',
