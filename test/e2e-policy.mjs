@@ -103,7 +103,8 @@ try {
     assert.ok(pop.enabled && pop.language && !pop.rehydrate);
   });
   await popup.close();
-  await admin.reload();
+  await admin.bringToFront();
+  await admin.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   await sleep(700);
   const dict = await admin.evaluate(() => ({
     note: document.getElementById('dict-policy').hidden ? '' : document.getElementById('dict-policy').textContent,

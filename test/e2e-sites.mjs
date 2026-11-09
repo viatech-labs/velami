@@ -210,7 +210,8 @@ try {
   await admin.goto(`chrome-extension://${extId}/dashboard.html#sites`);
   const ext = (msg) => admin.evaluate((m) => chrome.runtime.sendMessage(m), msg);
   await ext({ type: 'setSettings', patch: { language: 'it', dictionary: [{ term: 'Mario Rossi', type: 'PERSON' }] } });
-  await admin.reload();
+  await admin.bringToFront();
+  await admin.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   await admin.waitForSelector('#sites-optional .site');
   await admin.screenshot({ path: path.join(out, 'sites-off.png'), fullPage: true });
 
@@ -282,7 +283,8 @@ try {
       assert.ok(s.enabled && !s.verified, id);
     }
   });
-  await admin.reload();
+  await admin.bringToFront();
+  await admin.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
   await admin.waitForSelector('#sites-optional .site.on');
   await admin.screenshot({ path: path.join(out, 'sites-on.png'), fullPage: true });
 
