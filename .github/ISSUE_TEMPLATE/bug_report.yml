@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work, or personal data was not hidden
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use made-up data only. Never paste real names, cards, IBANs or keys here.
+        Security problems go to the private report, see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Velami version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Chrome version and OS
+      placeholder: "Chrome 142, macOS 15"
+    validations:
+      required: true
+  - type: dropdown
+    id: site
+    attributes:
+      label: Site
+      options: [ChatGPT, Claude, Gemini, Perplexity, Copilot, DeepSeek, Mistral Le Chat, Grok, Not site specific]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps, a made-up example text, what you expected and what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log entry
+      description: Optional. From Velami → Sent log, the request body as sent (it contains labels, not real values).
+      render: json

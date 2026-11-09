@@ -1,0 +1,11 @@
+name: Feature request
+description: A new data type, a new site, or an idea
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need
+      description: The problem first, then the solution you have in mind. For a new data type, add made-up examples that should and should not match.
+    validations:
+      required: true
