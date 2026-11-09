@@ -1,0 +1,280 @@
+// Тексты velami.pro. Язык выбирает nginx по Accept-Language, переключателя на странице нет.
+// Правило для текстов: без длинных тире и точек с запятой, короткие живые фразы.
+export const REPO = 'https://github.com/viatech-labs/velami';
+export const DOWNLOAD = REPO + '/releases/latest';
+export const MAIL = 'support@velami.pro';
+
+export const CONTENT = {
+  en: {
+    locale: 'en_US',
+    title: 'Velami: talk to AI, keep your data',
+    description: 'Velami hides names, card numbers, IBANs and passwords before your message reaches ChatGPT, Claude, Gemini or Perplexity, and shows the real values in the answer. Free, open source, runs on your computer.',
+    nav: { how: 'How it works', check: 'Transparency', teams: 'For teams', faq: 'FAQ', cta: 'Download' },
+    hero: {
+      eyebrow: 'Chrome extension · free and open source',
+      title: 'Talk to AI.<br><em>Keep your data to yourself.</em>',
+      lead: 'Velami hides names, card numbers, IBANs and passwords before your message reaches ChatGPT, Claude, Gemini or Perplexity. The answer comes back with the real values. Everything happens on your computer.',
+      cta: 'Download for Chrome',
+      source: 'View the source',
+      note: 'Coming soon to the Chrome Web Store.',
+      alt: 'Velami panel showing what the AI will receive',
+    },
+    demo: {
+      label: 'Try it right here',
+      you: 'You write',
+      ai: 'The AI receives',
+      count: 'Hidden: {n}',
+      none: 'Nothing to hide yet',
+      note: 'This box runs the same rules as the extension, right in this page. Nothing is sent anywhere. In the extension a local model also finds names and addresses.',
+      sample: 'Hi, help me write to my bank. My card 4111 1111 1111 1111 was stolen. IBAN GB82 WEST 1234 5698 7654 32, email john.carter@example.com, phone +44 20 7946 0958.',
+    },
+    how: {
+      title: 'Nothing changes in the way you chat',
+      lead: 'Velami works quietly between you and the AI. You only notice it when it matters.',
+      steps: [
+        ['Write as usual', 'A small panel next to the input shows what the AI will actually receive, while you type.'],
+        ['Velami swaps the data', 'Before the message leaves, personal data turns into labels like [[EMAIL_1]]. The real values stay in your browser.'],
+        ['Read the real answer', 'The AI replies with labels. Velami puts your data back, on your screen only. Copying gives you the real text too.'],
+      ],
+      alt: 'An AI answer with the real values restored',
+    },
+    types: {
+      title: 'What it hides',
+      lead: 'Numbers are matched by format and checksum, so a random number is not mistaken for a card. Names and addresses are found by a compact AI model that ships with the extension and runs offline.',
+      list: ['Names', 'Addresses', 'Bank cards', 'IBAN', 'Phone numbers', 'E-mail', 'Tax codes', 'Passports and ID cards', 'Dates of birth', 'Car plates', 'API keys', 'Passwords', 'IP addresses', 'Your own words'],
+    },
+    check: {
+      title: 'No need to trust us. Check.',
+      lead: 'Privacy tools usually ask for faith. Velami shows its work.',
+      cards: [
+        ['See before you send', 'The panel shows the exact text the AI will get. Untick anything you want to keep as it is.'],
+        ['A log of what left', 'Every request is kept on your computer exactly as it was sent, with a SHA-256 you can compare in DevTools.'],
+        ['Test it yourself', 'One button sends a sample to an independent echo server and shows you what arrived.'],
+        ['Open code', 'The source is public under AGPL-3.0 and the build is reproducible. Anyone can confirm the package matches the code.'],
+      ],
+      alt: 'Velami log with the exact body of each request',
+    },
+    files: {
+      title: 'Attachments too',
+      text: 'Text files are cleaned on the fly. PDF, Word, Excel and PowerPoint are read on your computer and sent as a clean text copy. When a file can’t be checked, like a scan or a photo, Velami asks before it goes out.',
+    },
+    sites: {
+      title: 'Works where you chat',
+      text: 'ChatGPT, Claude, Gemini and Perplexity work right away. Copilot, DeepSeek, Mistral Le Chat and Grok can be turned on in the settings.',
+      optional: 'in settings',
+    },
+    teams: {
+      title: 'For teams and companies',
+      lead: 'Give everyone the same protection without collecting a single message.',
+      cards: [
+        ['Company dictionary', 'Client names, projects and internal codes are hidden for every employee. Nobody can remove them.'],
+        ['Managed settings', 'Lock the settings through Google Admin, Intune, Group Policy or any Mac MDM. No extra servers.'],
+        ['Files under control', 'Allow only clean copies and hold back scans and images that can’t be checked.'],
+      ],
+      cta: 'Talk to us',
+      guide: 'Read the admin guide',
+    },
+    faq: {
+      title: 'Questions',
+      items: [
+        ['Does Velami send my data anywhere?', 'No. It has no servers and no account. The only request it makes on its own is the self test you start, and that carries labels, not your data.'],
+        ['Is it free?', 'Yes. Velami is free and open source. Companies that need a different license or help with the rollout can write to us.'],
+        ['Which browsers are supported?', 'Chrome 116 and newer. Other Chromium browsers that install extensions from the Chrome Web Store, like Edge, work the same way.'],
+        ['Is there anything it can’t protect?', 'The chat site sees what you type in its input box, and a site could read it and send it in a way no extension can see. Velami keeps your data out of the provider’s logs, chat history and training data, which is where it usually ends up.'],
+        ['Will it slow me down?', 'A short message is checked in less than half a second. The model takes about 250 MB of memory while loaded and unloads itself after five minutes of rest.'],
+      ],
+    },
+    footer: {
+      tagline: 'Talk to AI. Keep your data.',
+      made: 'Made by',
+      privacy: 'Privacy',
+      source: 'Source code',
+      support: 'Support',
+      clean: 'This site has no cookies and no trackers.',
+    },
+    privacy: { title: 'Privacy policy', back: 'Back to Velami' },
+  },
+
+  it: {
+    locale: 'it_IT',
+    title: 'Velami: parla con l’IA, i tuoi dati restano tuoi',
+    description: 'Velami nasconde nomi, numeri di carta, IBAN e password prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity, e nella risposta mostra i valori reali. Gratuito, open source, funziona sul tuo computer.',
+    nav: { how: 'Come funziona', check: 'Trasparenza', teams: 'Per le aziende', faq: 'Domande', cta: 'Scarica' },
+    hero: {
+      eyebrow: 'Estensione per Chrome · gratuita e open source',
+      title: 'Parla con l’IA.<br><em>I tuoi dati restano tuoi.</em>',
+      lead: 'Velami nasconde nomi, numeri di carta, IBAN e password prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity. La risposta torna con i valori reali. Tutto succede sul tuo computer.',
+      cta: 'Scarica per Chrome',
+      source: 'Guarda il codice',
+      note: 'Presto anche sul Chrome Web Store.',
+      alt: 'Il pannello di Velami mostra cosa riceverà l’IA',
+    },
+    demo: {
+      label: 'Provalo qui',
+      you: 'Tu scrivi',
+      ai: 'L’IA riceve',
+      count: 'Nascosti: {n}',
+      none: 'Ancora niente da nascondere',
+      note: 'Questo riquadro usa le stesse regole dell’estensione, direttamente in questa pagina. Non viene inviato nulla. Nell’estensione un modello locale trova anche nomi e indirizzi.',
+      sample: 'Ciao, aiutami a scrivere alla banca. Mi hanno rubato la carta 4111 1111 1111 1111. IBAN IT60 X054 2811 1010 0000 0123 456, codice fiscale RSSMRA85T10A562S, mail mario.rossi@example.com.',
+    },
+    how: {
+      title: 'In chat non cambia niente',
+      lead: 'Velami lavora in silenzio tra te e l’IA. Lo noti solo quando serve.',
+      steps: [
+        ['Scrivi come sempre', 'Mentre scrivi, un piccolo pannello accanto alla casella mostra cosa riceverà davvero l’IA.'],
+        ['Velami sostituisce i dati', 'Prima dell’invio i dati personali diventano etichette come [[EMAIL_1]]. I valori reali restano nel tuo browser.'],
+        ['Leggi la risposta vera', 'L’IA risponde con le etichette. Velami rimette i tuoi dati, solo sul tuo schermo. Anche quando copi ottieni il testo reale.'],
+      ],
+      alt: 'Una risposta dell’IA con i valori reali',
+    },
+    types: {
+      title: 'Cosa nasconde',
+      lead: 'I numeri vengono riconosciuti per formato e cifra di controllo, così un numero qualsiasi non viene scambiato per una carta. Nomi e indirizzi li trova un piccolo modello di IA incluso nell’estensione, che funziona offline.',
+      list: ['Nomi', 'Indirizzi', 'Carte bancarie', 'IBAN', 'Telefoni', 'E-mail', 'Codice fiscale e P. IVA', 'Documenti d’identità', 'Date di nascita', 'Targhe', 'Chiavi API', 'Password', 'Indirizzi IP', 'Le tue parole'],
+    },
+    check: {
+      title: 'Non devi fidarti. Verifica.',
+      lead: 'Gli strumenti per la privacy di solito chiedono fiducia. Velami ti mostra cosa fa.',
+      cards: [
+        ['Vedi prima di inviare', 'Il pannello mostra il testo esatto che riceverà l’IA. Togli la spunta a ciò che vuoi lasciare com’è.'],
+        ['Il registro di cosa è uscito', 'Ogni richiesta resta sul tuo computer così come è partita, con uno SHA-256 da confrontare in DevTools.'],
+        ['Mettilo alla prova', 'Un pulsante invia un esempio a un server eco indipendente e ti mostra cosa è arrivato.'],
+        ['Codice aperto', 'Il codice è pubblico con licenza AGPL-3.0 e la build è riproducibile. Chiunque può verificare che il pacchetto corrisponda al codice.'],
+      ],
+      alt: 'Il registro di Velami con il corpo esatto di ogni richiesta',
+    },
+    files: {
+      title: 'Anche gli allegati',
+      text: 'I file di testo vengono ripuliti al volo. PDF, Word, Excel e PowerPoint vengono letti sul tuo computer e inviati come copia di testo pulita. Se un file non si può controllare, come una scansione o una foto, Velami te lo chiede prima dell’invio.',
+    },
+    sites: {
+      title: 'Funziona dove chatti',
+      text: 'ChatGPT, Claude, Gemini e Perplexity funzionano subito. Copilot, DeepSeek, Mistral Le Chat e Grok si attivano nelle impostazioni.',
+      optional: 'nelle impostazioni',
+    },
+    teams: {
+      title: 'Per team e aziende',
+      lead: 'La stessa protezione per tutti, senza raccogliere nemmeno un messaggio.',
+      cards: [
+        ['Dizionario aziendale', 'Nomi dei clienti, progetti e codici interni restano nascosti per ogni dipendente. Nessuno può toglierli.'],
+        ['Impostazioni gestite', 'Blocca le impostazioni con Google Admin, Intune, Criteri di gruppo o qualsiasi MDM per Mac. Nessun server in più.'],
+        ['File sotto controllo', 'Permetti solo le copie pulite e trattieni scansioni e immagini che non si possono controllare.'],
+      ],
+      cta: 'Scrivici',
+      guide: 'Leggi la guida per gli amministratori',
+    },
+    faq: {
+      title: 'Domande',
+      items: [
+        ['Velami manda i miei dati da qualche parte?', 'No. Non ha server né account. L’unica richiesta che fa da solo è l’autotest che avvii tu, e contiene etichette, non i tuoi dati.'],
+        ['È gratuito?', 'Sì. Velami è gratuito e open source. Le aziende che hanno bisogno di un’altra licenza o di aiuto per l’installazione possono scriverci.'],
+        ['Con quali browser funziona?', 'Chrome 116 e successivi. Anche gli altri browser Chromium che installano estensioni dal Chrome Web Store, come Edge, funzionano allo stesso modo.'],
+        ['C’è qualcosa che non può proteggere?', 'Il sito della chat vede ciò che scrivi nella sua casella, e potrebbe leggerlo e inviarlo in un modo che nessuna estensione vede. Velami tiene i tuoi dati fuori dai log del fornitore, dalla cronologia delle chat e dai dati di addestramento, che è dove di solito finiscono.'],
+        ['Mi rallenta?', 'Un messaggio breve viene controllato in meno di mezzo secondo. Il modello occupa circa 250 MB di memoria mentre è caricato e si scarica da solo dopo cinque minuti di pausa.'],
+      ],
+    },
+    footer: {
+      tagline: 'Parla con l’IA. I tuoi dati restano tuoi.',
+      made: 'Realizzato da',
+      privacy: 'Privacy',
+      source: 'Codice sorgente',
+      support: 'Assistenza',
+      clean: 'Questo sito non usa cookie né tracker.',
+    },
+    privacy: { title: 'Informativa privacy', back: 'Torna a Velami' },
+  },
+
+  ru: {
+    locale: 'ru_RU',
+    title: 'Velami: общайтесь с ИИ, данные остаются у вас',
+    description: 'Velami скрывает имена, номера карт, IBAN и пароли до того, как сообщение уйдёт в ChatGPT, Claude, Gemini или Perplexity, и показывает в ответе настоящие значения. Бесплатно, открытый код, работает на вашем компьютере.',
+    nav: { how: 'Как это работает', check: 'Прозрачность', teams: 'Для компаний', faq: 'Вопросы', cta: 'Скачать' },
+    hero: {
+      eyebrow: 'Расширение для Chrome · бесплатно, открытый код',
+      title: 'Пишите ИИ.<br><em>Данные остаются у вас.</em>',
+      lead: 'Velami скрывает имена, номера карт, IBAN и пароли до того, как сообщение уйдёт в ChatGPT, Claude, Gemini или Perplexity. Ответ возвращается с настоящими значениями. Всё происходит на вашем компьютере.',
+      cta: 'Скачать для Chrome',
+      source: 'Исходный код',
+      note: 'Скоро в Chrome Web Store.',
+      alt: 'Панель Velami показывает, что получит ИИ',
+    },
+    demo: {
+      label: 'Попробуйте прямо здесь',
+      you: 'Вы пишете',
+      ai: 'ИИ получает',
+      count: 'Скрыто: {n}',
+      none: 'Пока скрывать нечего',
+      note: 'Здесь работают те же правила, что в расширении, прямо на этой странице. Ничего никуда не отправляется. В расширении имена и адреса дополнительно находит локальная модель.',
+      sample: 'Помоги написать в банк. Меня зовут Анна Сергеевна Миронова, карта 4111 1111 1111 1111 пропала. Почта anna.mironova@example.com, телефон +7 921 123-45-67.',
+    },
+    how: {
+      title: 'В чате ничего не меняется',
+      lead: 'Velami тихо работает между вами и ИИ. Вы замечаете его, только когда это важно.',
+      steps: [
+        ['Пишите как обычно', 'Пока вы печатаете, небольшая панель рядом с полем ввода показывает, что на самом деле получит ИИ.'],
+        ['Velami подменяет данные', 'Перед отправкой личные данные превращаются в метки вроде [[EMAIL_1]]. Настоящие значения остаются в браузере.'],
+        ['Читайте настоящий ответ', 'ИИ отвечает с метками. Velami возвращает ваши данные, только на вашем экране. При копировании вы тоже получаете настоящий текст.'],
+      ],
+      alt: 'Ответ ИИ с настоящими значениями',
+    },
+    types: {
+      title: 'Что скрывает',
+      lead: 'Номера проверяются по формату и контрольной сумме, поэтому случайное число не примут за карту. Имена и адреса находит небольшая модель ИИ, которая входит в расширение и работает без интернета.',
+      list: ['Имена', 'Адреса', 'Банковские карты', 'IBAN', 'Телефоны', 'E-mail', 'ИНН и СНИЛС', 'Паспорта и удостоверения', 'Даты рождения', 'Госномера', 'API-ключи', 'Пароли', 'IP-адреса', 'Ваши слова'],
+    },
+    check: {
+      title: 'Верить на слово не нужно. Проверьте.',
+      lead: 'Инструменты для приватности обычно просят доверия. Velami показывает, что делает.',
+      cards: [
+        ['Видно до отправки', 'Панель показывает точный текст, который получит ИИ. Снимите галочку с того, что хотите оставить как есть.'],
+        ['Журнал того, что ушло', 'Каждый запрос хранится на вашем компьютере в том виде, в каком ушёл, с SHA-256 для сверки в DevTools.'],
+        ['Проверьте сами', 'Одна кнопка отправляет пример на независимый эхо-сервер и показывает, что до него дошло.'],
+        ['Открытый код', 'Исходники опубликованы под AGPL-3.0, а сборка воспроизводима. Любой может убедиться, что пакет совпадает с кодом.'],
+      ],
+      alt: 'Журнал Velami с точным телом каждого запроса',
+    },
+    files: {
+      title: 'И вложения тоже',
+      text: 'Текстовые файлы очищаются на лету. PDF, Word, Excel и PowerPoint читаются на вашем компьютере и уходят чистой текстовой копией. Если файл проверить нельзя, например скан или фото, Velami спросит перед отправкой.',
+    },
+    sites: {
+      title: 'Работает там, где вы общаетесь',
+      text: 'ChatGPT, Claude, Gemini и Perplexity работают сразу. Copilot, DeepSeek, Mistral Le Chat и Grok включаются в настройках.',
+      optional: 'в настройках',
+    },
+    teams: {
+      title: 'Для команд и компаний',
+      lead: 'Одинаковая защита для всех сотрудников, и ни одного собранного сообщения.',
+      cards: [
+        ['Словарь компании', 'Имена клиентов, проекты и внутренние коды скрываются у каждого сотрудника. Удалить их нельзя.'],
+        ['Управляемые настройки', 'Закрепите настройки через Google Admin, Intune, групповые политики или любой MDM для Mac. Без дополнительных серверов.'],
+        ['Файлы под контролем', 'Разрешите только чистые копии и задерживайте сканы и картинки, которые нельзя проверить.'],
+      ],
+      cta: 'Написать нам',
+      guide: 'Инструкция для администратора',
+    },
+    faq: {
+      title: 'Вопросы',
+      items: [
+        ['Velami куда-то отправляет мои данные?', 'Нет. У него нет серверов и учётных записей. Единственный запрос, который он делает сам, это самопроверка, которую запускаете вы, и в ней метки, а не ваши данные.'],
+        ['Это бесплатно?', 'Да. Velami бесплатный, с открытым кодом. Компании, которым нужна другая лицензия или помощь с внедрением, могут нам написать.'],
+        ['В каких браузерах работает?', 'В Chrome 116 и новее. Другие браузеры на Chromium, которые ставят расширения из Chrome Web Store, например Edge, работают так же.'],
+        ['От чего он не защищает?', 'Сайт чата видит, что вы печатаете в его поле ввода, и может прочитать это и отправить так, что никакое расширение не увидит. Velami не даёт вашим данным попасть в логи провайдера, историю чатов и данные для обучения, а обычно они оказываются именно там.'],
+        ['Он не будет тормозить?', 'Короткое сообщение проверяется меньше чем за полсекунды. Пока модель загружена, она занимает около 250 МБ памяти и выгружается сама после пяти минут простоя.'],
+      ],
+    },
+    footer: {
+      tagline: 'Пишите ИИ. Данные остаются у вас.',
+      made: 'Разработка',
+      privacy: 'Приватность',
+      source: 'Исходный код',
+      support: 'Поддержка',
+      clean: 'На этом сайте нет cookies и трекеров.',
+    },
+    privacy: { title: 'Политика конфиденциальности', back: 'Вернуться к Velami' },
+  },
+};
+
+export const SITES = ['ChatGPT', 'Claude', 'Gemini', 'Perplexity'];
+export const OPTIONAL_SITES = ['Copilot', 'DeepSeek', 'Mistral Le Chat', 'Grok'];
