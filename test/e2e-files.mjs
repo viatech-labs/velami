@@ -2,7 +2,7 @@
 // Проверяем, что ушло на сервер сайта: копия с метками, оригинал по явному выбору или ничего.
 import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -129,16 +129,19 @@ try {
     assert.equal(uploads['estratto.pdf'], undefined);
   });
 
-  /* Длинный PDF: имя после первых 20 000 символов. Модель читает файл целиком, по частям. */
-  await pick('relazione-lunga.pdf');
-  const longText = textOf(await waitDialog(400));
-  await page.screenshot({ path: path.join(out, 'pdf-long-ask.png') });
-  await press('Annulla');
-  check('длинный PDF: имя в конце найдено, файл не ушёл как чистый', () => {
-    assert.match(longText, /Dati personali in «relazione-lunga\.pdf»/);
-    assert.match(longText, /Nome/);
-    assert.equal(uploads['relazione-lunga.pdf'], undefined);
-  });
+  /* Длинный PDF: имя после первых 20 000 символов. Модель читает файл целиком, по частям.
+     Модель в git не хранится, без неё имя искать нечем. */
+  if (existsSync(path.join(extDir, 'models/ner/model.onnx'))) {
+    await pick('relazione-lunga.pdf');
+    const longText = textOf(await waitDialog(400));
+    await page.screenshot({ path: path.join(out, 'pdf-long-ask.png') });
+    await press('Annulla');
+    check('длинный PDF: имя в конце найдено, файл не ушёл как чистый', () => {
+      assert.match(longText, /Dati personali in «relazione-lunga\.pdf»/);
+      assert.match(longText, /Nome/);
+      assert.equal(uploads['relazione-lunga.pdf'], undefined);
+    });
+  } else console.log('  - длинный PDF: пропущен, модель имён не собрана');
 
   /* Word: оригинал по явному выбору. */
   await pick('richiesta.docx');
