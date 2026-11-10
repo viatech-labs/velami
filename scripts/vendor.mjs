@@ -84,3 +84,13 @@ writeFileSync(path.join(tessDst, 'LICENSE.txt'), [
   readFileSync(path.join(root, 'node_modules/tesseract.js-core/LICENSE'), 'utf8'),
 ].join('\n'));
 console.log(`vendor/tesseract: tesseract.js ${tessVersion}, core ${coreVersion}, ${LANGS.join('+')}`);
+
+/* Шрифт меток на закрытых картинках: моноширинный, цифры и буквы не путаются (1 и I, 0 и O). */
+const fontVersion = version('@fontsource/ibm-plex-mono');
+const fontSrc = path.join(root, 'node_modules/@fontsource/ibm-plex-mono');
+const fontDst = path.join(root, 'vendor/fonts');
+rmSync(fontDst, { recursive: true, force: true });
+mkdirSync(fontDst, { recursive: true });
+copyFileSync(path.join(fontSrc, 'files/ibm-plex-mono-latin-600-normal.woff2'), path.join(fontDst, 'plex-mono-600.woff2'));
+writeFileSync(path.join(fontDst, 'LICENSE.txt'), `IBM Plex Mono, latin 600, @fontsource/ibm-plex-mono ${fontVersion}\n\n` + readFileSync(path.join(fontSrc, 'LICENSE'), 'utf8'));
+console.log(`vendor/fonts: IBM Plex Mono ${fontVersion}`);

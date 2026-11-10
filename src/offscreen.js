@@ -219,7 +219,17 @@ async function ocrBytes(bytes) {
   return r;
 }
 
-const LABEL_FONT = 'bold {px}px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+/* Метки рисуются своим шрифтом из пакета: на любой системе они выглядят одинаково. */
+const LABEL_FONT = '600 {px}px "Velami Label", ui-monospace, monospace';
+let labelFont = null;
+function labelFontReady() {
+  if (!labelFont) {
+    labelFont = new FontFace('Velami Label', `url(${BASE}vendor/fonts/plex-mono-600.woff2)`, { weight: '600' }).load()
+      .then((f) => { document.fonts.add(f); })
+      .catch(() => {});
+  }
+  return labelFont;
+}
 
 /* Найденные места заливаются серым, в первом прямоугольнике каждого значения тёмным пишется
    метка размером с окружающий текст: так её надёжнее читают и люди, и модели. Метка, которая
@@ -230,7 +240,7 @@ function paint(canvas, rects) {
     const h = Math.max(8, r.y1 - r.y0);
     let w = Math.max(4, r.x1 - r.x0);
     let label = r.token;
-    const px = Math.max(10, Math.round(h * 0.8));
+    const px = Math.max(10, Math.round(h * 0.85));
     if (label) {
       ctx.font = LABEL_FONT.replace('{px}', px);
       const bare = label.replace(/^\[\[|\]\]$/g, '');
@@ -262,6 +272,7 @@ async function redactBytes(bytes, list) {
   if (!spans.length) return null;
   const { rects, lost } = __PGImage.rectsFor(o.boxes, spans);
   if (lost.length) throw new Error('value without position on image');
+  await labelFontReady();
   const canvas = new OffscreenCanvas(o.canvas.width, o.canvas.height);
   canvas.getContext('2d').drawImage(o.canvas, 0, 0);
   paint(canvas, rects);

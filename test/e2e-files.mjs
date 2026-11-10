@@ -30,6 +30,9 @@ async function ocrText(bytes) {
   ocrWorker ||= await Tesseract.createWorker(['ita', 'eng', 'rus'], 1, { langPath: path.join(root, 'vendor', 'tesseract', 'lang'), cacheMethod: 'none', gzip: true });
   return (await ocrWorker.recognize(Buffer.from(bytes))).data.text;
 }
+/* Метки, которые прочитал OCR. Мелкий шрифт Tesseract читает с ошибками вроде 1BAN вместо IBAN,
+   поэтому считаем по форме метки, а не по точному тексту. */
+const labelsOn = (text) => text.match(/\[\[[A-Z1]{2,}_\d+\]\]|\b[A-Z1]{2,}_\d+\b/g) || [];
 /* PNG с текстовым блоком метаданных (автор), чтобы проверить, что он не уходит. */
 function withPngText(png, key, value) {
   const data = Buffer.concat([Buffer.from(key, 'latin1'), Buffer.from([0]), Buffer.from(value, 'latin1')]);
@@ -284,7 +287,7 @@ try {
     assert.equal(shot.type, 'image/png');
     assert.equal(Buffer.from(shot.bytes.subarray(1, 4)).toString(), 'PNG');
     assert.ok(!LEFT.test(shotSeen), 'на картинке осталось: ' + shotSeen);
-    assert.match(shotSeen, /IBAN_1/);
+    assert.ok(labelsOn(shotSeen).length >= 5, 'меток не видно: ' + shotSeen);
     assert.match(shotSeen, /Importo 1\.250,50 EUR/);
   });
 
@@ -317,7 +320,7 @@ try {
   const mediaSeen = await ocrText(media[1]);
   check('Word с картинкой: картинка внутри документа закрыта метками', () => {
     assert.ok(!LEFT.test(mediaSeen), 'на картинке осталось: ' + mediaSeen);
-    assert.match(mediaSeen, /IBAN_1/);
+    assert.ok(labelsOn(mediaSeen).length >= 4, 'меток не видно: ' + mediaSeen);
   });
 
   /* PDF с паролем: прочитать нельзя, спрашиваем. */

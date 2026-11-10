@@ -25,6 +25,7 @@ export function checkGenerated(root) {
   for (const f of ['tesseract.min.js', 'worker.min.js', 'tesseract-core-simd-lstm.wasm.js', 'lang/eng.traineddata.gz', 'lang/ita.traineddata.gz', 'lang/rus.traineddata.gz']) {
     if (!existsSync(path.join(root, 'vendor/tesseract', f))) problems.push(`нет vendor/tesseract/${f} (npm run setup)`);
   }
+  if (!existsSync(path.join(root, 'vendor/fonts/plex-mono-600.woff2'))) problems.push('нет vendor/fonts/plex-mono-600.woff2 (npm run setup)');
   return problems;
 }
 const IGNORED = new Set(['.DS_Store']);

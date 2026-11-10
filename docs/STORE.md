@@ -72,7 +72,7 @@ the label vault.
 
 **Remote code.** No. All code is in the package. The extension's own code is not minified. The
 bundled onnxruntime-web 1.31.1 (MIT), pdf.js 6.5.438 (Apache-2.0) and Tesseract.js 7.0.0 with its core (Apache-2.0) are the unmodified upstream builds, and the model files and Tesseract language data (tessdata_best, Apache-2.0) are data
-with SHA-256 recorded in `tools/model/model.lock.json`. The extension pages CSP is
+with SHA-256 recorded in `tools/model/model.lock.json`. Labels on covered images are drawn with the bundled IBM Plex Mono font (OFL-1.1). The extension pages CSP is
 `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly from the package only) and
 `connect-src 'self' https://httpbin.org`.
 
