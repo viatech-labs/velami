@@ -55,6 +55,11 @@ await page.setContent(html(`<h1>Estratto conto</h1><p>Intestatario: Mario Rossi,
 <div style="page-break-before:always"><p>Pagina due: nessun dato personale.</p></div>`));
 writeFileSync(path.join(dir, 'estratto.pdf'), await page.pdf({ format: 'A4' }));
 
+/* Длинный отчёт: имя только в самом конце, после первых 20 000 символов. Его находит только модель. */
+const para = '<p>Il gruppo di lavoro ha verificato i moduli di gestione degli ordini, la reportistica mensile e i flussi di approvazione. Le prove di carico sono state ripetute su tre ambienti con risultati stabili e tempi di risposta nella norma.</p>';
+await page.setContent(html('<h1>Relazione di avanzamento</h1>' + para.repeat(140) + '<p>Firmato: Luca Bianchi, responsabile del progetto.</p>'));
+writeFileSync(path.join(dir, 'relazione-lunga.pdf'), await page.pdf({ format: 'A4' }));
+
 await page.setContent(html('<p style="font-size:28px">Mario Rossi, mario.rossi@example.com</p>'));
 const shot = await page.screenshot({ encoding: 'base64', clip: { x: 0, y: 0, width: 700, height: 120 } });
 await page.setContent(html(`<img src="data:image/png;base64,${shot}" width="700">`));

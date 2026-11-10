@@ -81,6 +81,8 @@ const MODEL_TYPES = { person: 'PERSON', address: 'ADDRESS' };
 const PREVIEW_BUDGET = 250;
 const SEND_BUDGET = 3000;
 const MODEL_MAX_CHARS = 20000;
+const FILE_BUDGET = 60000;
+const FILE_MAX_CHUNKS = 25;
 const model = { state: 'idle', error: '', loadMs: 0, lastMs: 0, threads: 0, available: null };
 const modelTerms = new Map();
 const recognized = new Set();
@@ -230,14 +232,37 @@ async function mask({ text }) {
   };
 }
 
-async function maskBatch({ texts, trusted, dryRun }) {
+/* Текст файла модель читает по частям: у неё предел MODEL_MAX_CHARS на запуск. */
+function fileChunks(text) {
+  const out = [];
+  let rest = text;
+  while (rest.length > MODEL_MAX_CHARS && out.length < FILE_MAX_CHUNKS) {
+    const cut = rest.lastIndexOf('\n', MODEL_MAX_CHARS);
+    const at = cut > MODEL_MAX_CHARS / 2 ? cut + 1 : MODEL_MAX_CHARS;
+    out.push(rest.slice(0, at));
+    rest = rest.slice(at);
+  }
+  const complete = rest.length <= MODEL_MAX_CHARS;
+  if (complete) out.push(rest);
+  return { chunks: out.filter((c) => c.trim()), complete };
+}
+
+async function recognizeFile(texts) {
+  const parts = texts.map(fileChunks);
+  const ok = await within(recognize(parts.flatMap((p) => p.chunks)), FILE_BUDGET);
+  if (ok) texts.forEach((t, i) => { if (parts[i].complete) recognized.add(t); });
+  return ok && parts.every((p) => p.complete);
+}
+
+async function maskBatch({ texts, trusted, dryRun, file }) {
   const s = await load();
   if (!s.settings.enabled) return { disabled: true };
   const list = (texts || []).map(String);
   const userText = list.filter((_, i) => trusted && trusted[i]);
   const pendingModel = userText.filter((t) => t.trim() && !recognized.has(t));
   const modelOn = s.settings.model && await modelAvailable();
-  const modelChecked = !modelOn || !pendingModel.length || await within(recognize(pendingModel), SEND_BUDGET);
+  const modelChecked = !modelOn || !pendingModel.length
+    || await (file ? recognizeFile(pendingModel) : within(recognize(pendingModel), SEND_BUDGET));
   const vault = dryRun ? new PG.Vault(s.vault.data) : s.vault;
   const opts = { ...ctx(s, vault), commit: true };
   const known = PG.candidatesFrom(userText, { dictionary: s.settings.dictionary, auto: opts.auto, exclusions: s.settings.exclusions })
@@ -261,7 +286,7 @@ async function maskBatch({ texts, trusted, dryRun }) {
     + out.reduce((n, t) => n + PG.locate(t, known).length, 0);
   const summary = { count, byType, recheck: remaining };
   if (!modelChecked && userText.some((t) => t.trim())) summary.model = model.state === 'error' ? 'error' : 'timeout';
-  else if (modelOn && userText.some((t) => t.length > MODEL_MAX_CHARS)) summary.model = 'partial';
+  else if (modelOn && !file && userText.some((t) => t.length > MODEL_MAX_CHARS)) summary.model = 'partial';
   if (!dryRun) {
     stats(s).masked += count;
     await persist(created ? ['vault', 'stats'] : ['stats']);
@@ -403,7 +428,7 @@ async function handle(msg, sender) {
     case 'noteInput':
       noteInput(msg.text);
       return { ok: true };
-    case 'maskBatch': return maskBatch({ texts: msg.texts, trusted: msg.trusted, dryRun: fromExtensionPage && !!msg.dryRun });
+    case 'maskBatch': return maskBatch({ texts: msg.texts, trusted: msg.trusted, dryRun: fromExtensionPage && !!msg.dryRun, file: !!msg.file });
     case 'log': return addLog(msg.entry, sender);
     case 'scan': return scan(msg, sender);
     case 'setExclusion': return setExclusion(msg);

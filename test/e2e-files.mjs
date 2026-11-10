@@ -129,6 +129,17 @@ try {
     assert.equal(uploads['estratto.pdf'], undefined);
   });
 
+  /* Длинный PDF: имя после первых 20 000 символов. Модель читает файл целиком, по частям. */
+  await pick('relazione-lunga.pdf');
+  const longText = textOf(await waitDialog(400));
+  await page.screenshot({ path: path.join(out, 'pdf-long-ask.png') });
+  await press('Annulla');
+  check('длинный PDF: имя в конце найдено, файл не ушёл как чистый', () => {
+    assert.match(longText, /Dati personali in «relazione-lunga\.pdf»/);
+    assert.match(longText, /Nome/);
+    assert.equal(uploads['relazione-lunga.pdf'], undefined);
+  });
+
   /* Word: оригинал по явному выбору. */
   await pick('richiesta.docx');
   await press('Invia l’originale');

@@ -723,12 +723,14 @@
     if (!r || r.error) throw new Error((r && r.error) || tr('err.noReply'));
     if (r.reason) return askUnchecked(f, r.reason === 'big' ? 'big' : r.reason, { mb: 30 });
     if (!String(r.text || '').trim()) return askUnchecked(f, 'notext');
-    const m = await send({ type: 'maskBatch', texts: [r.text], trusted: [true] });
+    const m = await send({ type: 'maskBatch', texts: [r.text], trusted: [true], file: true });
     if (!m || m.error) throw new Error((m && m.error) || tr('err.noReply'));
     if (m.disabled) return f;
     const images = r.emptyPages || 0;
     const types = typesText(m.summary);
+    const unnamed = !!m.summary.model;
     if (!m.summary.count) {
+      if (unnamed) return askUnchecked(f, 'names');
       if (images) return askUnchecked(f, 'partial', { n: images });
       checkedFiles.add(sigOf(f));
       send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: r.text } }).catch(() => {});
@@ -740,7 +742,7 @@
     const choice = await ask({
       title: tr('file.doc.title', { name: f.name }),
       text: tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
-      note: [images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
+      note: [unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
         noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
       buttons: [
         { id: 'cancel', label: tr('file.ask.cancel') },
