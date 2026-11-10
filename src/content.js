@@ -343,16 +343,44 @@
 
   /* ---------- контроль покрытия: каждую отправку шлюз должен увидеть ---------- */
 
+  /* Куда страница ходила, пока шлюз ждал отправку: адрес без строки запроса, идентификаторы
+     заменены. По этому списку видно, каким путём сообщение ушло мимо шлюза. */
+  function requestsSince(t0) {
+    const seen = new Set();
+    for (const r of performance.getEntriesByType('resource')) {
+      if (r.startTime < t0 || !/^(fetch|xmlhttprequest|beacon|other)$/.test(r.initiatorType)) continue;
+      try {
+        const u = new URL(r.name);
+        seen.add(`${r.initiatorType} ${u.host}${u.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|\d{6,}|[\w-]{24,}/gi, ':id')}`);
+      } catch { /* ignore */ }
+      if (seen.size >= 15) break;
+    }
+    return [...seen];
+  }
+
+  /* Сайт может отправить сообщение только после загрузки файла: пока загрузка идёт и ещё
+     пару секунд после неё ожидание продлевается, но не дольше UPLOAD_WAIT. */
+  const SEND_WAIT = 6000;
+  const UPLOAD_WAIT = 90000;
+  let uploadsActive = 0;
+  let uploadEndedAt = 0;
   let expectTimer = null;
   function expectSend() {
     const text = composerText().trim();
     if (!enabled || !text) return;
     send({ type: 'noteInput', text }).catch(() => {});
     clearTimeout(expectTimer);
-    expectTimer = setTimeout(() => {
+    const t0 = performance.now();
+    const check = () => {
+      const waited = performance.now() - t0;
+      if (waited < UPLOAD_WAIT && (uploadsActive > 0 || Date.now() - uploadEndedAt < 2500)) {
+        expectTimer = setTimeout(check, 1000);
+        return;
+      }
       raise('bad', 'pill.coverage', tr('status.coverage'));
-      send({ type: 'log', entry: { kind: 'coverage', host: location.host, path: location.pathname, note: tr('status.coverageNote') } }).catch(() => {});
-    }, 6000);
+      send({ type: 'log', entry: { kind: 'coverage', host: location.host, path: location.pathname, note: tr('status.coverageNote'), requests: requestsSince(t0) } }).catch(() => {});
+    };
+    expectTimer = setTimeout(check, SEND_WAIT);
   }
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
@@ -367,7 +395,10 @@
   }, true);
 
   function onHookEvent(ev) {
-    if (ev.event === 'sent') {
+    if (ev.event === 'upload') {
+      uploadsActive = Math.max(0, Number(ev.active) || 0);
+      if (!uploadsActive) uploadEndedAt = Date.now();
+    } else if (ev.event === 'sent') {
       clearTimeout(expectTimer);
       if (alert && alert.pill === 'pill.coverage') alert = null;
       const s = ev.summary || { count: 0, byType: {}, recheck: 0 };

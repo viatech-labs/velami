@@ -214,6 +214,7 @@ async function loadLog() {
     }
     if (e.types) card.append(el('div', { class: 'chips' }, ...e.types.map((type) => el('span', { class: 'chip', text: I18N.label(type) }))));
     if (e.reason || e.note) card.append(el('div', { class: 'muted', text: e.reason || e.note }));
+    if (Array.isArray(e.requests) && e.requests.length) card.append(el('pre', { class: 'muted', text: e.requests.join('\n') }));
     if (k === 'other') card.append(el('div', { class: 'muted', text: t('log.otherNote') }));
     if (k === 'leak') card.append(el('div', { class: 'muted', text: t('log.leakNote') }));
 

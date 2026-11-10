@@ -83,15 +83,16 @@ runtime and 3 MB pdf.js with its character maps. See `docs/MODEL.md`.
 
 The extension processes on the device: personally identifiable information, financial and payment
 information, authentication information (keys and passwords the user pastes), personal
-communications (chat text). None of it is collected by or transmitted to the developer, sold, or used
-for any purpose other than the single purpose above.
+communications (chat text), website content (the outgoing request and the answer on the chat page).
+None of it is collected by or transmitted to the developer, sold, or used for any purpose other than
+the single purpose above.
+
+Tick these five data types. The Web Store User Data FAQ (question 3) requires disclosure even when
+data is only processed or stored on the device. The one network call the extension makes itself is
+the user-started self-test to httpbin.org with a sample text that already contains labels.
 
 Certifications to tick: data is not sold to third parties; not used or transferred for purposes
 unrelated to the single purpose; not used to determine creditworthiness or for lending.
-
-Before ticking, re-read the current Web Store definitions of “collect”: the extension stores the data
-locally and sends nothing to the developer. The one network call it makes itself is the user-started
-self-test to httpbin.org with a sample text that already contains labels.
 
 Privacy policy URL: https://velami.pro/privacy
 

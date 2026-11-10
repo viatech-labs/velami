@@ -283,6 +283,19 @@
     return next;
   }
 
+  /* Пока страница загружает файл, сайт может держать сообщение у себя и отправить его модели
+     после загрузки (Claude: PDF, снято 10/11/2026). Изолированный мир на это время продлевает
+     ожидание отправки, иначе тревога «в обход» срабатывает зря. */
+  const isBinary = (b) => b instanceof Blob || b instanceof ArrayBuffer || ArrayBuffer.isView(b);
+  let uploads = 0;
+  function uploading(on, promise) {
+    if (!on) return promise;
+    emit({ event: 'upload', active: ++uploads });
+    const done = () => emit({ event: 'upload', active: --uploads });
+    promise.then(done, done);
+    return promise;
+  }
+
   /* ---------- fetch ---------- */
 
   async function guardedFetch(input, init) {
@@ -315,14 +328,15 @@
       if (!shape) {
         if (isFile(body)) noteFiles(url, method, [body]);
         else if (method === 'PUT' && (body instanceof Blob || body instanceof ArrayBuffer || ArrayBuffer.isView(body))) reportUnchecked(url, method);
-        return Reflect.apply(origFetch, window, args);
+        return uploading(isBinary(body), Reflect.apply(origFetch, window, args));
       }
       noteFiles(url, method, shape.files);
+      const up = !!(shape.files && shape.files.length);
 
       const r = await process(url, method, shape, body);
-      if (!r.changed) return Reflect.apply(origFetch, window, args);
-      if (req && !hasInitBody) return Reflect.apply(origFetch, window, [new Request(req, { body: r.body })]);
-      return Reflect.apply(origFetch, window, [input, { ...init, body: r.body }]);
+      if (!r.changed) return uploading(up, Reflect.apply(origFetch, window, args));
+      if (req && !hasInitBody) return uploading(up, Reflect.apply(origFetch, window, [new Request(req, { body: r.body })]));
+      return uploading(up, Reflect.apply(origFetch, window, [input, { ...init, body: r.body }]));
     } catch (err) {
       throw blocked(url, method, err);
     }
@@ -360,6 +374,9 @@
   XMLHttpRequest.prototype.send = function (data) {
     const meta = this.__pg;
     const shape = meta && data != null ? shapeOf(data, '') : null;
+    if (meta && meta.async && (isBinary(data) || (shape && shape.files && shape.files.length))) {
+      uploading(true, new Promise((resolve) => this.addEventListener('loadend', resolve, { once: true })));
+    }
     if (!shape) {
       if (meta && isFile(data)) noteFiles(meta.url, meta.method, [data]);
       return Reflect.apply(origXhrSend, this, [data]);

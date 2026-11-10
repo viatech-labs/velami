@@ -269,13 +269,14 @@ async function maskBatch({ texts, trusted, dryRun }) {
   return { texts: out, summary };
 }
 
-const LOG_FIELDS = ['kind', 'channel', 'host', 'path', 'method', 'file', 'summary', 'texts', 'body', 'reason', 'note', 'types'];
+const LOG_FIELDS = ['kind', 'channel', 'host', 'path', 'method', 'file', 'summary', 'texts', 'body', 'reason', 'note', 'types', 'requests'];
 const KIND_STAT = { sent: 'requests', file: 'files', blocked: 'blocked', leak: 'leaks', unchecked: 'unchecked', coverage: 'coverage', dropped: 'dropped' };
 
 async function addLog(entry, sender) {
   const e = { id: crypto.randomUUID(), at: Date.now(), site: '' };
   for (const k of LOG_FIELDS) if (entry && entry[k] !== undefined) e[k] = entry[k];
   if (!KIND_STAT[e.kind]) return { ok: false };
+  if (e.requests !== undefined) e.requests = Array.isArray(e.requests) ? e.requests.filter((r) => typeof r === 'string').slice(0, 15).map((r) => r.slice(0, 200)) : undefined;
   try { e.site = new URL(sender.tab.url).host; } catch { /* ignore */ }
   if (typeof e.body === 'string') {
     e.bodyBytes = new TextEncoder().encode(e.body).length;

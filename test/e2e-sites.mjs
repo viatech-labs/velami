@@ -149,6 +149,7 @@ const PAGES = {
   'https://copilot.microsoft.com/': COPILOT,
 };
 const captured = {};
+const slow = {};
 const reply = (body) => {
   let text = body;
   try { text = decodeURIComponent(body.replace(/\+/g, ' ')); } catch { /* не форма */ }
@@ -174,6 +175,7 @@ async function open(url) {
       const body = req.postData() ?? (await req.fetchPostData().catch(() => '')) ?? '';
       const key = new URL(u).host + new URL(u).pathname;
       captured[key] = body;
+      if (slow[new URL(u).pathname]) await sleep(slow[new URL(u).pathname]);
       return req.respond({ status: 200, headers: { 'access-control-allow-origin': '*' }, contentType: 'text/plain; charset=utf-8', body: reply(body) });
     }
     return req.abort();
@@ -189,9 +191,9 @@ async function type(page) {
   await sleep(700);
 }
 
-async function sendAndAnswer(page, name) {
+async function sendAndAnswer(page, name, wait = 10000) {
   await page.click('#send');
-  await page.waitForSelector('.answer, .error', { timeout: 10000 });
+  await page.waitForSelector('.answer, .error', { timeout: wait });
   await sleep(600);
   const err = await page.$('.error');
   assert.ok(!err, name + ': ' + (err && await page.$eval('.error', (n) => n.textContent)));
@@ -329,6 +331,46 @@ try {
     assert.ok(log.some((e) => e.kind === 'dropped' && e.host === 'suggest.perplexity.ai'), 'нет записи о подсказках');
     assert.ok(!log.some((e) => e.kind === 'coverage' || e.kind === 'blocked' || e.kind === 'leak'), JSON.stringify(log.filter((e) => ['coverage', 'blocked', 'leak'].includes(e.kind))));
   });
+
+  /* Сайт держит сообщение, пока грузится файл, и отправляет его после загрузки (так делает Claude
+     с PDF). Ожидание продлевается, тревоги «в обход» нет. */
+  PAGES['https://chat.deepseek.com/upload'] = shell('DeepSeek', textarea, '<button aria-label="Send" id="send">Invia</button>', `
+document.getElementById('send').onclick = async () => {
+  const text = read();
+  const fd = new FormData();
+  fd.append('file', new File([new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55])], 'scheda.pdf', { type: 'application/pdf' }));
+  await fetch('/api/v0/file/upload_file', { method: 'POST', body: fd });
+  const r = await fetch('/api/v0/chat/completion', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_session_id: '7c1e0b8e-0000-4000-8000-00000000000b', prompt: text, ref_file_ids: ['file-1'] }) });
+  show(await r.text());
+};`);
+  slow['/api/v0/file/upload_file'] = 8000;
+  page = await open('https://chat.deepseek.com/upload');
+  await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
+  await type(page);
+  answer = await sendAndAnswer(page, 'DeepSeek con file', 20000);
+  check('отправка после долгой загрузки файла: сообщение с метками, тревоги нет', () => {
+    clean('DeepSeek con file', JSON.parse(captured['chat.deepseek.com/api/v0/chat/completion']).prompt);
+  });
+  await sleep(3000);
+  const afterUpload = await ext({ type: 'getLog' });
+  check('после загрузки файла записи «в обход» нет', () => assert.ok(!afterUpload.some((e) => e.kind === 'coverage'), JSON.stringify(afterUpload.filter((e) => e.kind === 'coverage'))));
+  await page.close();
+
+  /* Сайт сменил способ отправки: сообщение ушло не на путь из sites.js. Velami должен поднять
+     тревогу и записать, куда страница ходила, без содержимого запросов. */
+  PAGES['https://chat.deepseek.com/moved'] = jsonSite('DeepSeek', '/api/v1/chat/stream', (t) => ({ chat_session_id: '7c1e0b8e-0000-4000-8000-00000000000a', payload: t.length }));
+  page = await open('https://chat.deepseek.com/moved');
+  await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
+  await type(page);
+  await page.click('#send');
+  await sleep(7500);
+  const moved = (await ext({ type: 'getLog' })).find((e) => e.kind === 'coverage');
+  check('отправка мимо известного пути: тревога и адреса запросов в журнале', () => {
+    assert.ok(moved, 'нет записи о покрытии');
+    assert.ok(moved.requests.some((r) => r.endsWith('chat.deepseek.com/api/v1/chat/stream')), JSON.stringify(moved.requests));
+    for (const v of SECRETS) assert.ok(!JSON.stringify(moved).includes(v), 'в записи ' + v);
+  });
+  await page.close();
 
   await ext({ type: 'setSettings', patch: { sites: { deepseek: false } } });
   page = await open('https://chat.deepseek.com/');

@@ -1,7 +1,7 @@
 // Тексты velami.pro. Язык выбирает nginx по Accept-Language, переключателя на странице нет.
 // Правило для текстов: без длинных тире и точек с запятой, короткие живые фразы.
 export const REPO = 'https://github.com/viatech-labs/velami';
-export const DOWNLOAD = REPO + '/releases/latest';
+export const DOWNLOAD = 'https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn';
 export const MAIL = 'support@velami.pro';
 
 export const CONTENT = {
@@ -19,7 +19,7 @@ export const CONTENT = {
       cta: 'Download for Chrome',
       code: 'Check the package yourself',
       source: 'View the source',
-      note: 'Coming soon to the Chrome Web Store.',
+      note: 'Installs from the Chrome Web Store.',
       alt: 'Velami panel showing what the AI will receive',
     },
     demo: {
@@ -127,7 +127,7 @@ export const CONTENT = {
       cta: 'Scarica per Chrome',
       code: 'Verifica tu il pacchetto',
       source: 'Guarda il codice',
-      note: 'Presto anche sul Chrome Web Store.',
+      note: 'Si installa dal Chrome Web Store.',
       alt: 'Il pannello di Velami mostra cosa riceverà l’IA',
     },
     demo: {
@@ -235,7 +235,7 @@ export const CONTENT = {
       cta: 'Скачать для Chrome',
       code: 'Проверьте пакет сами',
       source: 'Исходный код',
-      note: 'Скоро в Chrome Web Store.',
+      note: 'Устанавливается из Chrome Web Store.',
       alt: 'Панель Velami показывает, что получит ИИ',
     },
     demo: {
