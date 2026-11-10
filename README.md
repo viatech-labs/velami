@@ -51,8 +51,9 @@ case endings.
 
 **Files:** text files are cleaned in place. Word, Excel and PowerPoint are read locally in full,
 including metadata, comments and their authors, tracked changes, fields, links, charts and embedded
-workbooks, and go out as the same document with labels instead of the data. PDF goes out as a clean
-text copy, scanned pages included. On images (PNG, JPEG, WebP, GIF, BMP), and on images inside Office
+workbooks, and go out as the same document with labels instead of the data. PDF up to 30 pages, scanned
+pages included, goes out as a PDF with the same pages, the data covered by labels and a text layer
+with labels, longer PDF as a clean text copy. On images (PNG, JPEG, WebP, GIF, BMP), and on images inside Office
 documents, Velami reads the text on the device (Tesseract, Italian, English, Russian), covers the
 data with labels and removes location and camera data. Files Velami cannot read are held back until
 you decide.
@@ -122,9 +123,11 @@ browser extension can stop that. The welcome page says so.
 | `src/page-hook.js` | the chat page (MAIN world) | intercepts `fetch`, XHR, `sendBeacon`, WebSocket |
 | `src/content.js` | isolated world | bridge, panel, restoring answers, files, clipboard |
 | `src/background.js` | service worker | label vault, log, stats, model queue, policy |
-| `src/offscreen.js` | offscreen document | onnxruntime-web model, PDF and Office text |
+| `src/offscreen.js` | offscreen document | onnxruntime-web model, PDF and Office text, OCR, covering |
 | `src/ner-core.js` | offscreen document, Node | tokenizer and model input and output |
 | `src/office.js` | offscreen document, Node | Word, Excel, PowerPoint text, zip reader with limits |
+| `src/image.js` | offscreen document, Node | OCR layout, boxes for found values, metadata removal |
+| `src/pdf.js` | offscreen document, Node | PDF text geometry, text layer with labels, PDF writer |
 | `src/policy.js` | service worker, Node | organization policy from `chrome.storage.managed` |
 | `src/sites.js`, `src/proto.js` | everywhere | supported sites, Gemini protobuf |
 | `scripts/` | Node | reproducible zip and verification |
@@ -151,7 +154,8 @@ All tests use made-up data only. The interface is in English, Italian and Russia
 
 ## Limitations
 
-PDF goes out as a text copy, without layout. Text on images is recognized automatically and can be
+The clean PDF copy is made of page images with a text layer, so links, forms, attachments and
+vector quality are not kept, and PDF over 30 pages goes out as a text copy. Text on images is recognized automatically and can be
 misread, faces, signatures and handwriting are not recognized. HEIC, TIFF, SVG and AVIF images and
 old `.doc` and `.xls` are not parsed. The model misses some names and addresses and
 sometimes flags too much. While loaded it uses about 250 MB of memory, and the package is about

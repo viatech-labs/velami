@@ -81,9 +81,9 @@ const EMPTY_PAGE = 20;
 let pdfjs = null;
 
 /* Страница без текстового слоя (скан, фото): рисуется примерно в 200 dpi и читается OCR. */
-async function pageOcr(page) {
+async function renderPage(page, dpi, maxSide) {
   const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(200 / 72, 4000 / Math.max(base.width, base.height));
+  const scale = Math.min(dpi / 72, maxSide / Math.max(base.width, base.height));
   const viewport = page.getViewport({ scale });
   const canvas = new OffscreenCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
   const ctx = canvas.getContext('2d');
@@ -94,23 +94,35 @@ async function pageOcr(page) {
   let timer;
   await Promise.race([task.promise, new Promise((_, no) => { timer = setTimeout(() => { task.cancel(); no(new Error('render timeout')); }, PAGE_RENDER_MS); })])
     .finally(() => clearTimeout(timer));
+  return { canvas, viewport, scale };
+}
+
+async function pageOcr(page) {
+  const { canvas } = await renderPage(page, 200, 4000);
   return (await ocrCanvas(canvas)).text;
 }
 
-async function pdfText(bytes) {
+async function openPdf(bytes) {
   if (!pdfjs) {
     pdfjs = await import('../vendor/pdfjs/pdf.min.mjs');
     pdfjs.GlobalWorkerOptions.workerSrc = PDF + 'pdf.worker.min.mjs';
   }
-  let doc;
   const task = pdfjs.getDocument({ data: bytes, cMapUrl: PDF + 'cmaps/', cMapPacked: true, isEvalSupported: false, disableFontFace: true, useSystemFonts: false, stopAtErrors: false });
   try {
-    doc = await task.promise;
+    return { task, doc: await task.promise };
   } catch (e) {
     task.destroy();
     if (e && e.name === 'PasswordException') return { reason: 'password' };
     throw e;
   }
+}
+
+const pageText = (content) => content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim();
+
+/* ocr: false читает только текстовый слой (проверка готовой копии, где слой есть на каждой странице). */
+async function pdfText(bytes, { ocr = true } = {}) {
+  const { task, doc, reason } = await openPdf(bytes);
+  if (reason) return { reason };
   try {
     const pages = Math.min(doc.numPages, MAX_PAGES);
     const texts = [];
@@ -118,9 +130,8 @@ async function pdfText(bytes) {
     let ocrPages = 0;
     for (let i = 1; i <= pages; i++) {
       const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      let text = content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim();
-      if (text.replace(/\s/g, '').length < EMPTY_PAGE) {
+      let text = pageText(await page.getTextContent());
+      if (ocr && text.replace(/\s/g, '').length < EMPTY_PAGE) {
         const seen = ocrPages < OCR_PAGES ? await pageOcr(page).catch(() => null) : null;
         if (seen === null) empty++;
         else { ocrPages++; text = (text + '\n' + seen).trim(); }
@@ -233,18 +244,29 @@ function labelFontReady() {
 
 /* Найденные места заливаются серым, в первом прямоугольнике каждого значения тёмным пишется
    метка размером с окружающий текст: так её надёжнее читают и люди, и модели. Метка, которая
-   не помещается, расширяет заливку вправо. */
+   не помещается, теряет скобки, потом уменьшается до 0,7 размера и только после этого расширяет
+   заливку вправо, закрывая соседний текст. */
 function paint(canvas, rects) {
   const ctx = canvas.getContext('2d');
   for (const r of rects) {
     const h = Math.max(8, r.y1 - r.y0);
     let w = Math.max(4, r.x1 - r.x0);
     let label = r.token;
-    const px = Math.max(10, Math.round(h * 0.85));
+    let px = Math.max(10, Math.round(h * 0.85));
     if (label) {
-      ctx.font = LABEL_FONT.replace('{px}', px);
+      const fits = (t, size) => { ctx.font = LABEL_FONT.replace('{px}', size); return ctx.measureText(t).width + 8 <= w; };
       const bare = label.replace(/^\[\[|\]\]$/g, '');
-      if (ctx.measureText(label).width + 8 > w && ctx.measureText(bare).width + 8 <= w) label = bare;
+      if (!fits(label, px)) {
+        if (fits(bare, px)) label = bare;
+        else {
+          const min = Math.max(10, Math.round(px * 0.7));
+          ctx.font = LABEL_FONT.replace('{px}', px);
+          const at = Math.max(min, Math.floor(px * (w - 8) / ctx.measureText(label).width));
+          if (fits(label, at)) px = at;
+          else { label = bare; px = Math.max(min, Math.min(px, Math.floor(px * (w - 8) / ctx.measureText(bare).width))); }
+        }
+      }
+      ctx.font = LABEL_FONT.replace('{px}', px);
       w = Math.max(w, ctx.measureText(label).width + 8);
     }
     w = Math.min(w, canvas.width - r.x0);
@@ -300,6 +322,69 @@ async function cleanImage(name, bytes, list) {
   return { name: out.name, type: out.type, data: toBase64(r.bytes), replaced: r.replaced };
 }
 
+/* PDF той же формой. Каждая страница рисуется в PDF_DPI, места значений по текстовому слою
+   (на скане по OCR) закрываются плашками с метками. Закрытую страницу читает OCR: найденное им
+   (значение на вставленной картинке, неточная рамка) закрывается вторым проходом, а если и после
+   него что-то читается, копии нет. Ссылки, формы и вложения в копию не попадают. */
+const PDF_DPI = 150;
+const PDF_MAX_SIDE = 2600;
+const PDF_COPY_PAGES = 30;
+let measureCtx = null;
+function measure(s) {
+  measureCtx ||= new OffscreenCanvas(1, 1).getContext('2d');
+  measureCtx.font = '100px sans-serif';
+  return measureCtx.measureText(s).width;
+}
+
+function locateOn(o, list) {
+  const byId = new Map(list.map((v) => [v.id, v.token]));
+  return PG.locate(o.text, list).map((f) => ({ ...f, token: byId.get(f.id) }));
+}
+
+async function cleanPdf(name, bytes, list) {
+  const { task, doc, reason } = await openPdf(bytes);
+  if (reason) return { error: reason };
+  try {
+    if (doc.numPages > PDF_COPY_PAGES) return { error: 'too many pages', pages: doc.numPages };
+    await labelFontReady();
+    const pages = [];
+    let replaced = 0;
+    for (let i = 1; i <= doc.numPages; i++) {
+      touch();
+      const page = await doc.getPage(i);
+      const { canvas, viewport, scale } = await renderPage(page, PDF_DPI, PDF_MAX_SIDE);
+      let o = __PGPdf.textLayout((await page.getTextContent()).items, viewport.transform, measure);
+      if (o.text.replace(/\s/g, '').length < EMPTY_PAGE) o = await ocrCanvas(canvas);
+      const spans = locateOn(o, list);
+      const { rects, lost } = __PGImage.rectsFor(o.boxes, spans, 3);
+      if (lost.length) throw new Error('value without position on page ' + i);
+      paint(canvas, rects);
+      replaced += spans.length;
+      for (let pass = 0; ; pass++) {
+        const seen = await ocrCanvas(canvas);
+        const left = locateOn(seen, list);
+        if (!left.length) break;
+        if (pass) return { error: 'values left after cleaning', page: i, left: left.length };
+        paint(canvas, __PGImage.rectsFor(seen.boxes, left, 3).rects);
+      }
+      const runs = __PGPdf.maskedRuns(o.text, o.boxes, spans).map((r) => {
+        const h = (r.y1 - r.y0) / scale;
+        return { x: r.x0 / scale, y: viewport.height / scale - (r.y1 - (r.y1 - r.y0) * 0.2) / scale, size: h, width: (r.x1 - r.x0) / scale, text: r.text };
+      });
+      const jpeg = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 })).arrayBuffer());
+      pages.push({ width: viewport.width / scale, height: viewport.height / scale, jpeg, imageWidth: canvas.width, imageHeight: canvas.height, runs });
+      page.cleanup();
+    }
+    const out = __PGPdf.write(pages);
+    /* pdf.js забирает буфер себе (transfer), поэтому на проверку уходит копия. */
+    const check = await pdfText(out.slice(), { ocr: false });
+    if (check.reason || PG.locate(check.text, list).length) return { error: 'values left after cleaning' };
+    return { name, type: 'application/pdf', data: toBase64(out), replaced, pages: pages.length };
+  } finally {
+    task.destroy();
+  }
+}
+
 /* Картинки внутри документов Office: текст для поиска и замена на закрытую копию. */
 async function officeOcr(key, bytes) {
   const o = await ocrBytes(bytes).catch(() => null);
@@ -313,9 +398,11 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
+const isPdf = (name, bytes) => /\.pdf$/i.test(name) || (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46);
+
 async function extract({ name, data }) {
   const bytes = fromBase64(data);
-  if (/\.pdf$/i.test(name) || (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
+  if (isPdf(name, bytes)) {
     return { kind: 'pdf', ...(await pdfText(bytes)) };
   }
   if (__PGOffice.kindOf(name)) return __PGOffice.extract(bytes, name, { ocr: officeOcr });
@@ -323,7 +410,7 @@ async function extract({ name, data }) {
   return { reason: 'unsupported' };
 }
 
-/* Документ Office с метками вместо найденных значений. Готовый файл разбирается заново:
+/* Документ Office, PDF или картинка с метками вместо найденных значений. Готовый файл разбирается заново:
    если в нём осталось хоть одно значение, копия не отдаётся. */
 async function cleanDoc({ name, data, values }) {
   const list = (Array.isArray(values) ? values : [])
@@ -332,6 +419,7 @@ async function cleanDoc({ name, data, values }) {
   if (!list.length) return { error: 'nothing to clean' };
   const bytes = fromBase64(data);
   name = String(name || '');
+  if (isPdf(name, bytes)) return cleanPdf(name, bytes, list);
   if (!__PGOffice.kindOf(name) && __PGImage.formatOf(bytes)) return cleanImage(name, bytes, list);
   const redact = async (key, read) => {
     const r = await redactBytes(await read(), list);

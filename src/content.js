@@ -660,6 +660,7 @@
   const TEXT_MIME = /^text\/|^application\/(json|ld\+json|xml|x-yaml|yaml|csv|sql|x-sh|javascript|x-ndjson)\b/i;
   const MAX_TEXT_FILE = 2 * 1024 * 1024;
   const MAX_DOC_FILE = 30 * 1024 * 1024;
+  const PDF_COPY_PAGES = 30;
   const DOC_EXT = /\.(pdf|docx|docm|xlsx|xlsm|pptx|pptm)$/i;
   const DOC_MIME = /^application\/(pdf|vnd\.openxmlformats-officedocument\.)/i;
   const IMAGE = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?|avif|svg)$/i;
@@ -670,6 +671,7 @@
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    pdf: 'application/pdf',
   };
   const checkedFiles = new Set();
   const replayed = new WeakSet();
@@ -780,7 +782,8 @@
   const fromBase64 = (data) => Uint8Array.from(atob(data), (ch) => ch.charCodeAt(0));
 
   /* PDF и Office: текст достаёт offscreen-документ расширения. Если в тексте есть данные,
-     пользователь выбирает: копия с метками (Office тем же форматом, PDF текстом), оригинал или отмена. */
+     пользователь выбирает: копия с метками в том же формате, оригинал или отмена. Длинный PDF
+     (больше PDF_COPY_PAGES страниц) и документ, который не удалось собрать, уходят текстом. */
   async function cleanDoc(f) {
     if (f.size > MAX_DOC_FILE) return askUnchecked(f, 'big', { mb: 30 });
     toast('ok', tr('file.reading', { name: f.name }), 20000);
@@ -804,12 +807,16 @@
       return f;
     }
     const office = r.kind !== 'pdf';
-    const sameName = office ? f.name.replace(/\.(doc|xls|ppt)m$/i, (x, k) => '.' + k + 'x') : '';
+    const pdfSame = !office && !r.truncated && r.pages <= PDF_COPY_PAGES;
+    const same = office || pdfSame;
+    const sameName = office ? f.name.replace(/\.(doc|xls|ppt)m$/i, (x, k) => '.' + k + 'x') : f.name;
     const copyName = f.name + '.txt';
     const noOriginal = policy.allowOriginalFiles === false;
     const choice = await ask({
       title: tr('file.doc.title', { name: f.name }),
-      text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName }) : tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
+      text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName })
+        : pdfSame ? tr('file.doc.foundPdf', { n: m.summary.count, types, copy: sameName })
+          : tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
       note: [unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
         office && r.images > (r.imagesRead || 0) ? tr('file.doc.images', { n: r.images - (r.imagesRead || 0) }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
         noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
@@ -821,8 +828,10 @@
     });
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
-    if (office) {
+    if (same) {
+      if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 180000);
       const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
+      if (pdfSame) toastEl.hidden = true;
       if (c && !c.error && c.data) {
         const file = new File([fromBase64(c.data)], c.name, { type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, lastModified: f.lastModified });
         checkedFiles.add(sigOf(file));
@@ -833,9 +842,9 @@
     }
     const file = new File([m.texts[0]], copyName, { type: 'text/plain', lastModified: f.lastModified });
     checkedFiles.add(sigOf(file));
-    const how = tr(office ? 'file.sameFailed' : 'file.converted', { copy: copyName });
+    const how = tr(same ? 'file.sameFailed' : 'file.converted', { copy: copyName });
     send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how } }).catch(() => {});
-    toast(office ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
+    toast(same ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
     return file;
   }
 

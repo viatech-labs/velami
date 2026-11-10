@@ -73,7 +73,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Attachments too',
-      text: 'Text files are cleaned on the fly. Word, Excel and PowerPoint are read in full on your computer and sent as the same document with labels, PDF as a clean text copy. On screenshots, photos and scans Velami reads the text on your computer and covers the data with labels. When a file can’t be checked, Velami asks before it goes out.',
+      text: 'Text files are cleaned on the fly. Word, Excel and PowerPoint are read in full on your computer and sent as the same document with labels, PDF as the same pages with the data covered. On screenshots, photos and scans Velami reads the text on your computer and covers the data with labels. When a file can’t be checked, Velami asks before it goes out.',
     },
     sites: {
       title: 'Works where you chat',
@@ -181,7 +181,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Anche gli allegati',
-      text: 'I file di testo vengono ripuliti al volo. Word, Excel e PowerPoint vengono letti per intero sul tuo computer e inviati come lo stesso documento con le etichette, i PDF come copia di testo pulita. In screenshot, foto e scansioni Velami legge il testo sul tuo computer e copre i dati con le etichette. Se un file non si può controllare, Velami te lo chiede prima dell’invio.',
+      text: 'I file di testo vengono ripuliti al volo. Word, Excel e PowerPoint vengono letti per intero sul tuo computer e inviati come lo stesso documento con le etichette, i PDF come le stesse pagine con i dati coperti. In screenshot, foto e scansioni Velami legge il testo sul tuo computer e copre i dati con le etichette. Se un file non si può controllare, Velami te lo chiede prima dell’invio.',
     },
     sites: {
       title: 'Funziona dove chatti',
@@ -289,7 +289,7 @@ export const CONTENT = {
     },
     files: {
       title: 'И вложения тоже',
-      text: 'Текстовые файлы очищаются на лету. Word, Excel и PowerPoint целиком читаются на вашем компьютере и уходят тем же документом с метками, PDF чистой текстовой копией. На скриншотах, фото и сканах Velami читает текст прямо на компьютере и закрывает данные метками. Если файл проверить нельзя, Velami спросит перед отправкой.',
+      text: 'Текстовые файлы очищаются на лету. Word, Excel и PowerPoint целиком читаются на вашем компьютере и уходят тем же документом с метками, PDF теми же страницами с закрытыми данными. На скриншотах, фото и сканах Velami читает текст прямо на компьютере и закрывает данные метками. Если файл проверить нельзя, Velami спросит перед отправкой.',
     },
     sites: {
       title: 'Работает там, где вы общаетесь',

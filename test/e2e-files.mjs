@@ -24,6 +24,25 @@ const OFFICE = {
 const require = createRequire(import.meta.url);
 const Office = require(path.join(root, 'src', 'office.js'));
 const Tesseract = require('tesseract.js');
+const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+/* Что модель получит из PDF: текстовый слой и картинки страниц. */
+async function pdfLayers(bytes) {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+  let text = '';
+  for (let i = 1; i <= doc.numPages; i++) {
+    const c = await (await doc.getPage(i)).getTextContent();
+    text += c.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('') + '\n';
+  }
+  const pages = doc.numPages;
+  await doc.cleanup();
+  const raw = Buffer.from(bytes);
+  const images = [];
+  for (let at = raw.indexOf('/DCTDecode'); at >= 0; at = raw.indexOf('/DCTDecode', at + 1)) {
+    const start = raw.indexOf('stream\n', at) + 7;
+    images.push(raw.subarray(start, raw.indexOf('\nendstream', start)));
+  }
+  return { text, pages, images, raw: raw.toString('latin1') };
+}
 let ocrWorker = null;
 /* Что увидит модель на картинке: тот же OCR, что в расширении, но в Node. */
 async function ocrText(bytes) {
@@ -165,23 +184,38 @@ try {
     }, name, type, data.toString('base64'));
   }
 
-  /* PDF с текстом: копия с метками. */
+  const sent = async (name, tries = 60) => {
+    for (let i = 0; i < tries && uploads[name] === undefined; i++) await sleep(150);
+    const b = await page.evaluate((n) => window.__bin[n], name);
+    return b && { type: b.type, bytes: new Uint8Array(Buffer.from(b.data, 'base64')) };
+  };
+
+  /* PDF с текстом: тот же PDF, места закрыты, текстовый слой с метками. */
   await pick('estratto.pdf');
   const askText = textOf(await waitDialog());
   await page.screenshot({ path: path.join(out, 'pdf-ask.png') });
   check('PDF с данными: окно с выбором, оригинал сайту пока не передан', () => {
     assert.match(askText, /Dati personali in «estratto\.pdf»/);
-    assert.match(askText, /estratto\.pdf\.txt/);
+    assert.match(askText, /copia pulita «estratto\.pdf»: le stesse pagine/);
   });
   assert.deepEqual(await got(), []);
   await press('Invia copia pulita');
-  const pdfCopy = await waitUpload('estratto.pdf.txt');
-  check('PDF: сайт получил текстовую копию с метками, без данных', () => {
-    assert.ok(pdfCopy, 'копия не загружена');
-    for (const v of SECRETS) assert.ok(!pdfCopy.includes(v), 'утекло ' + v);
-    for (const t of ['[[EMAIL_1]]', '[[CARD_1]]', '[[IBAN_1]]', '[[CF_1]]']) assert.ok(pdfCopy.includes(t), 'нет ' + t);
-    assert.match(pdfCopy, /Estratto conto/);
-    assert.equal(uploads['estratto.pdf'], undefined);
+  const pdfSent = await sent('estratto.pdf', 600);
+  assert.ok(pdfSent, 'копия estratto.pdf не загружена');
+  writeFileSync(path.join(out, 'estratto-sent.pdf'), pdfSent.bytes);
+  const pdfCopy = await pdfLayers(pdfSent.bytes);
+  const pdfSeen = await ocrText(pdfCopy.images[0]);
+  writeFileSync(path.join(out, 'estratto-sent-p1.jpg'), pdfCopy.images[0]);
+  check('PDF: сайт получил тот же PDF, в тексте метки, на странице данные закрыты', () => {
+    assert.equal(pdfSent.type, 'application/pdf');
+    assert.ok(pdfCopy.raw.startsWith('%PDF-'));
+    assert.equal(pdfCopy.images.length, pdfCopy.pages);
+    for (const v of SECRETS) assert.ok(!pdfCopy.text.includes(v), 'утекло ' + v);
+    assert.ok(!LEFT.test(pdfCopy.raw), 'в байтах PDF осталось: ' + (pdfCopy.raw.match(LEFT) || [])[0]);
+    for (const t of ['[[EMAIL_1]]', '[[CARD_1]]', '[[IBAN_1]]', '[[CF_1]]']) assert.ok(pdfCopy.text.includes(t), 'нет ' + t + ' в ' + pdfCopy.text);
+    assert.match(pdfCopy.text, /Estratto conto/);
+    assert.ok(!LEFT.test(pdfSeen), 'на странице осталось: ' + pdfSeen);
+    assert.match(pdfSeen, /Estratto conto/);
   });
 
   /* Длинный PDF: имя после первых 20 000 символов. Модель читает файл целиком, по частям.
@@ -219,11 +253,6 @@ try {
   assert.equal(await page.$eval('#file', (i) => i.files.length), 0);
 
   /* Office: чистая копия в том же формате. Проверяются сырые байты каждой части пакета. */
-  const sent = async (name) => {
-    await waitUpload(name);
-    const b = await page.evaluate((n) => window.__bin[n], name);
-    return b && { type: b.type, bytes: new Uint8Array(Buffer.from(b.data, 'base64')) };
-  };
   async function sameFormat(file, sentName, mime, labels) {
     await pick(file);
     const text = textOf(await waitDialog());
@@ -262,17 +291,21 @@ try {
     assert.equal(uploads['macro.docm'], undefined);
   });
 
-  /* Скан: страница-картинка читается OCR, уходит текстовая копия с метками. */
+  /* Скан: страница-картинка читается OCR, уходит тот же PDF с закрытыми местами. */
   await pick('scansione.pdf');
   const scanText = textOf(await waitDialog(400));
   await page.screenshot({ path: path.join(out, 'scan-ask.png') });
   await press('Invia copia pulita');
-  const scanCopy = await waitUpload('scansione.pdf.txt');
-  check('PDF-скан: текст страницы-картинки прочитан OCR, ушла копия с метками', () => {
+  const scanSent = await sent('scansione.pdf', 600);
+  assert.ok(scanSent, 'копия scansione.pdf не загружена');
+  const scanCopy = await pdfLayers(scanSent.bytes);
+  const scanSeen = await ocrText(scanCopy.images[0]);
+  writeFileSync(path.join(out, 'scansione-sent-p1.jpg'), scanCopy.images[0]);
+  check('PDF-скан: текст страницы-картинки прочитан OCR, ушёл тот же PDF, места закрыты, слой с метками', () => {
     assert.match(scanText, /Dati personali in «scansione\.pdf»/);
-    assert.ok(scanCopy && scanCopy.includes('[[EMAIL_1]]'), 'нет метки в копии: ' + scanCopy);
-    assert.ok(!LEFT.test(scanCopy), 'утекло: ' + scanCopy);
-    assert.equal(uploads['scansione.pdf'], undefined);
+    assert.ok(scanCopy.text.includes('[[EMAIL_1]]'), 'нет метки в слое: ' + scanCopy.text);
+    assert.ok(!LEFT.test(scanCopy.text), 'утекло в слой: ' + scanCopy.text);
+    assert.ok(!LEFT.test(scanSeen), 'на странице осталось: ' + scanSeen);
   });
 
   /* Картинка с данными: та же картинка, места закрыты метками. */
@@ -360,7 +393,7 @@ try {
   const log = await ext({ type: 'getLog' });
   const pillText = textOf(find(await tree(), (n) => cls(n, 'pill')));
   check('журнал: копии записаны как проверенные, оригиналы по выбору с причиной, тревоги нет', () => {
-    assert.ok(log.some((e) => e.kind === 'file' && e.file === 'estratto.pdf' && /estratto\.pdf\.txt/.test(e.note || '')));
+    assert.ok(log.some((e) => e.kind === 'file' && e.file === 'estratto.pdf' && /stesso formato/.test(e.note || '')));
     assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'richiesta.docx' && /su tua scelta/.test(e.note)));
     assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'scheda.tiff'));
     assert.ok(log.some((e) => e.kind === 'file' && e.file === 'bonifico.png' && /stessa immagine/.test(e.note || '')));

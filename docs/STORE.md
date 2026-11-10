@@ -111,7 +111,7 @@ Write to ChatGPT, Claude, Gemini and Perplexity as usual. Copilot, DeepSeek, Mis
 and Grok can be turned on in the settings. Before a message leaves your computer, Velami finds
 card numbers, IBANs, tax codes, ID documents, dates of birth, licence plates, phone numbers, e-mails and API keys, recognises names and addresses
 with a model that runs on your computer, and replaces them with labels like [[EMAIL_1]]. The model answers with labels, you see the answer with
-the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, PDF as a text copy with labels, images as the same image with the data covered, and the Copy button gives you the
+the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, PDF as the same pages with the data covered, images as the same image with the data covered, and the Copy button gives you the
 real values.
 
 You do not have to trust us. A panel next to the chat shows the exact text the model will get. The
@@ -133,7 +133,7 @@ Scrivi a ChatGPT, Claude, Gemini e Perplexity come sempre. Copilot, DeepSeek, Mi
 e Grok si attivano nelle impostazioni. Prima che un messaggio lasci il tuo computer, Velami
 trova numeri di carta, IBAN, codici fiscali, documenti, date di nascita, targhe, telefoni, e-mail e chiavi API, riconosce nomi e
 indirizzi con un modello che gira sul tuo computer, e li sostituisce con etichette come [[EMAIL_1]]. Il modello risponde con le etichette, tu vedi la
-risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, i PDF come copia di testo, le immagini come la stessa immagine con i dati coperti, e il pulsante Copia
+risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, i PDF come le stesse pagine con i dati coperti, le immagini come la stessa immagine con i dati coperti, e il pulsante Copia
 ti dà i valori reali.
 
 Non devi fidarti di noi. Un pannello accanto alla chat mostra il testo esatto che riceverà il
@@ -155,7 +155,7 @@ Description:
 и Grok включаются в настройках. До того как сообщение покинет компьютер, Velami
 находит номера карт, IBAN, налоговые коды, документы, даты рождения, госномера, телефоны, e-mail и API-ключи, распознаёт имена и адреса
 моделью, которая работает на вашем компьютере, и заменяет их метками вроде [[EMAIL_1]]. Модель отвечает с метками, а вы видите ответ с настоящими
-значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, PDF текстовой копией, картинки той же картинкой с закрытыми данными, а кнопка «Копировать» отдаёт настоящие
+значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, PDF теми же страницами с закрытыми данными, картинки той же картинкой с закрытыми данными, а кнопка «Копировать» отдаёт настоящие
 значения.
 
 Верить нам на слово не нужно. Панель рядом с чатом показывает точный текст, который получит модель.

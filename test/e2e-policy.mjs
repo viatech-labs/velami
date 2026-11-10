@@ -33,8 +33,10 @@ const PAGE = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>
 <input type="file" id="file" multiple><div id="drop" style="margin-top:12px;padding:30px;border:2px dashed #aaa">Trascina qui</div>
 <script>
 window.__got = [];
+window.__head = {};
 async function upload(f) {
   window.__got.push(f.name);
+  window.__head[f.name] = new TextDecoder('latin1').decode(await f.slice(0, 4096).arrayBuffer()) + new TextDecoder('latin1').decode(await f.slice(-4096).arrayBuffer());
   await fetch('https://files.example/upload/' + encodeURIComponent(f.name), { method: 'PUT', body: f });
 }
 document.getElementById('file').onchange = (e) => { for (const f of e.target.files) upload(f); };
@@ -158,7 +160,12 @@ try {
     await sleep(300);
   }
   const pick = async (name) => { await page.evaluate(() => { document.getElementById('file').value = ''; }); await (await page.$('#file')).uploadFile(path.join(files, name)); };
-  const waitUpload = async (name) => { for (let i = 0; i < 60 && uploads[name] === undefined; i++) await sleep(150); return uploads[name]; };
+  const waitUpload = async (name, tries = 60) => { for (let i = 0; i < tries && uploads[name] === undefined; i++) await sleep(150); return uploads[name]; };
+  /* Копия PDF от Velami: страницы картинками и невидимый слой своим шрифтом, оригинал так не выглядит. */
+  const isVelamiPdf = async (name) => {
+    const head = await page.evaluate((n) => window.__head[n], name);
+    return typeof head === 'string' && head.startsWith('%PDF-1.7') && /\/Root \d+ 0 R >>\nstartxref/.test(head) && !/\/Info/.test(head);
+  };
 
   await pick('estratto.pdf');
   const pdfAsk = await waitDialog();
@@ -166,23 +173,23 @@ try {
   const pdfText = textOf(pdfAsk);
   await page.screenshot({ path: path.join(out, 'pdf-no-original.png') });
   await press('Invia copia pulita');
-  const copy = await waitUpload('estratto.pdf.txt');
-  check('PDF с данными: кнопки «оригинал» нет, есть пояснение, копия уходит с метками', () => {
+  await waitUpload('estratto.pdf', 600);
+  const copyOk = await isVelamiPdf('estratto.pdf');
+  check('PDF с данными: кнопки «оригинал» нет, есть пояснение, уходит только чистая копия PDF', () => {
     assert.deepEqual(pdfButtons, ['Annulla', 'Invia copia pulita']);
     assert.match(pdfText, /solo la copia pulita/);
-    assert.ok(copy && copy.includes('[[EMAIL_1]]') && !copy.includes('mario.rossi@example.com'));
-    assert.equal(uploads['estratto.pdf'], undefined);
+    assert.ok(copyOk, 'ушёл не очищенный PDF');
   });
 
   await pick('scansione.pdf');
   const scanAsk = await waitDialog(400);
   const scanButtons = buttons(scanAsk);
   await press('Invia copia pulita');
-  const scanCopy = await waitUpload('scansione.pdf.txt');
-  check('скан: текст прочитан OCR, оригинал запрещён, уходит только копия с метками', () => {
+  await waitUpload('scansione.pdf', 600);
+  const scanOk = await isVelamiPdf('scansione.pdf');
+  check('скан: текст прочитан OCR, оригинал запрещён, уходит только чистая копия PDF', () => {
     assert.deepEqual(scanButtons, ['Annulla', 'Invia copia pulita']);
-    assert.ok(scanCopy && scanCopy.includes('[[EMAIL_') && !scanCopy.includes('mario.rossi@example.com'));
-    assert.equal(uploads['scansione.pdf'], undefined);
+    assert.ok(scanOk, 'ушёл не очищенный PDF');
   });
 
   /* Картинка в формате, который Velami не читает: отправить нельзя, только «OK». */
