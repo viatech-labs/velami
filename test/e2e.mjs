@@ -197,6 +197,27 @@ try {
     const b = r.getBoundingClientRect();
     return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
   });
+  /* Ответ приходит кусками, каждый в своём элементе, как у ChatGPT: метка разорвана на узлы. */
+  const streamed = await page.evaluate(async () => {
+    const wrap = document.createElement('span');
+    const p = document.createElement('p');
+    p.className = 'streamed';
+    p.append(wrap);
+    document.getElementById('answers').append(p);
+    const pieces = ['Il titolare è **', '[', '[PERSON', '_', '1]]', '**, mail ', '[[EMAIL', '_1]]', '; firma PERSON', '_', '1', '; altro [[PERSON', '_99]]', ' fine.'];
+    for (const t of pieces) {
+      const s = document.createElement('span');
+      s.textContent = t;
+      wrap.append(s);
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    return p.textContent;
+  });
+  check('метка, разорванная по элементам при выводе ответа, подставляется', () => {
+    assert.equal(streamed, 'Il titolare è **Мария Петрова**, mail maria.petrova@example.com; firma Мария Петрова; altro [[PERSON_99]] fine.');
+  });
+
   await page.mouse.move(box.x, box.y);
   await sleep(300);
   const tipText = await shadowTexts();

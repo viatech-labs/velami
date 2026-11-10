@@ -73,6 +73,14 @@ test('названия ИИ-сервисов и метки не считаютс
   assert.equal(NER.accept(e(0, 5), 'Li Wu'), 'Li Wu');
 });
 
+test('роль в начале строки не считается именем, имя рядом с ней остаётся', () => {
+  const e = (start, end) => ({ label: 'person', start, end });
+  assert.equal(NER.accept(e(0, 7), 'Cliente: Mario Rossi'), null);
+  assert.equal(NER.accept(e(0, 6), 'Клиент Иван Петров'), null);
+  assert.equal(NER.accept(e(0, 19), 'Cliente Mario Rossi'), 'Cliente Mario Rossi');
+  assert.equal(NER.accept(e(9, 20), 'Cliente: Mario Rossi'), 'Mario Rossi');
+});
+
 test('находки на перекрытии кусков не дублируются', async () => {
   const text = Array.from({ length: 300 }, (_, i) => (i === 150 ? 'Mario' : 'x')).join(' ');
   const run = async (words) => words.filter((w) => w.text === 'Mario').map((w) => ({ label: 'person', start: w.start, end: w.end, score: 0.9 }));

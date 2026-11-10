@@ -81,6 +81,9 @@ if (process.env.PG_EXT_DIR) cpSync(src, extDir, { recursive: true });
 else for (const f of listFiles(root)) cpSync(path.join(root, f), path.join(extDir, f));
 const manifest = JSON.parse(readFileSync(path.join(extDir, 'manifest.json'), 'utf8'));
 manifest.host_permissions = [...manifest.host_permissions, ...manifest.optional_host_permissions];
+/* Путь копии от запуска к запуску одинаковый, и при той же версии Chrome берёт фоновый скрипт из кэша
+   профиля, а не с диска. Уникальная четвёртая цифра версии заставляет прочитать свежий код. */
+manifest.version = `${manifest.version.split('.').slice(0, 3).join('.')}.${Math.floor(Date.now() / 1000) % 60000}`;
 writeFileSync(path.join(extDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
 const browser = await puppeteer.launch({
@@ -92,11 +95,13 @@ const browser = await puppeteer.launch({
 });
 const report = [];
 try {
-  const sw = await browser.waitForTarget((t) => t.type() === 'service_worker' && t.url().endsWith('/src/background.js'), { timeout: 15000 });
+  const isWorker = (t) => t.type() === 'service_worker' && t.url().endsWith('/src/background.js');
+  const sw = await browser.waitForTarget(isWorker, { timeout: 15000 });
   const extId = new URL(sw.url()).host;
   const admin = await browser.newPage();
   await admin.goto(`chrome-extension://${extId}/dashboard.html#log`);
   const ext = (msg) => admin.evaluate((m) => chrome.runtime.sendMessage(m), msg);
+  if ((await ext({ type: 'cleanDoc' }))?.error === 'unknown message') throw new Error('Chrome запустил устаревший фоновый скрипт');
   await ext({ type: 'setSettings', patch: { askImages: true, sites: Object.fromEntries(Sites.SITES.filter((s) => s.optional).map((s) => [s.id, sites.includes(s.id)])) } });
   const version = (await ext({ type: 'state' })).version || manifest.version;
   console.log(`Velami ${manifest.version} из ${src}`);
@@ -157,6 +162,8 @@ try {
 
       let dialogText = null;
       if (c.file) {
+        const quota = await uploadQuota(page, site);
+        if (quota) return { ok: null, skipped: 'у аккаунта кончилась квота загрузки файлов: ' + quota };
         const file = path.isAbsolute(c.file) ? c.file : path.join(files, c.file);
         const via = await giveFile(page, composer, file, c.via);
         if (!via) { await shot('0-nofile'); return { ok: false, error: 'сайт не принял файл: нет поля и перетаскивание не сработало' }; }
@@ -217,6 +224,26 @@ async function missingInAnswer(page, message, values = []) {
 
 /* Claude после первой отправки меняет главный фрейм, и page.evaluate теряет его. Сессия CDP
    привязана к вкладке и переживает смену фрейма. */
+/* Где на странице осталась метка: текстовые узлы вокруг неё и их родители. Нужен для разбора,
+   почему подстановка не сработала (метка разорвана по узлам, лежит в поле ввода и т. п.). */
+async function tokenDom(page) {
+  const expression = `(() => {
+    const re = /\\[\\[[A-Z_]+_\\d+\\]\\]/;
+    const out = [];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+    let el;
+    while ((el = w.nextNode()) && out.length < 6) {
+      if (!re.test(el.textContent) || [...el.children].some((k) => re.test(k.textContent))) continue;
+      const nodes = [...el.childNodes].map((n) => n.nodeType === 3 ? 'T' + JSON.stringify(n.nodeValue.slice(0, 50)) : '<' + n.nodeName.toLowerCase() + (n.className ? '.' + String(n.className).slice(0, 30) : '') + '>' + JSON.stringify((n.textContent || '').slice(0, 30)));
+      const path = []; for (let p = el; p && path.length < 6; p = p.parentElement) path.push(p.nodeName.toLowerCase() + (p.isContentEditable ? '[ce]' : ''));
+      out.push({ path: path.join('<'), nodes });
+    }
+    return out;
+  })()`;
+  const r = await page._client().send('Runtime.evaluate', { expression, returnByValue: true });
+  return r.result.value;
+}
+
 async function readText(page) {
   try {
     const r = await page._client().send('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true });
@@ -252,6 +279,7 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
   const labelsSeen = sent.some((b) => b.body && /\[\[[A-Z_]+_\d+\]\]/.test(decode(b.body)));
   const alarms = log.filter((e) => e.kind === 'coverage' || e.kind === 'leak').map((e) => e.kind);
   const problems = [];
+  const extra = {};
   if (leaked.length) problems.push('УТЕЧКА: ' + leaked.join(', '));
   /* Если ушло сообщение или чистая копия, метки обязаны быть в перехваченном трафике.
      Нет меток: скрипт не видел нужный запрос, и «утечки нет» ничего не доказывает. */
@@ -265,7 +293,10 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
   if (c.file && c.press === 'clean' && !log.some((e) => e.kind === 'file' && e.file === path.basename(c.file))) problems.push('нет записи о чистой копии в журнале');
   if (sentMessage) {
     if (missing.length) problems.push('в ответе нет настоящих значений: ' + missing.join(', '));
-    if (TOKEN.test(pageText)) problems.push('метка на странице: ' + pageText.match(TOKEN)[0]);
+    if (TOKEN.test(pageText)) {
+      problems.push('метка на странице: ' + pageText.match(TOKEN)[0]);
+      extra.tokenDom = await tokenDom(page).catch((e) => String(e));
+    }
     if (!log.some((e) => e.kind === 'sent')) problems.push('отправка не видна в журнале');
   }
   if (followup && followup.length) problems.push('второе сообщение: нет ' + followup.join(', '));
@@ -290,6 +321,7 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
     log: log.map((e) => `${e.kind}${e.file ? ' ' + e.file : ''}${e.summary ? ' n=' + e.summary.count : ''}`),
     dialog: dialogText,
     clipboard: clipboard && (clipboard.error || clipboard.text.slice(0, 120)),
+    ...extra,
   };
 }
 
@@ -302,6 +334,20 @@ function writeReport() {
   const ok = report.filter((r) => r.ok).length;
   const skipped = report.filter((r) => r.ok === null).length;
   console.log(`\nИтог: ${ok} из ${report.length - skipped} без замечаний, пропущено ${skipped}. ${path.join(out, 'report.md')}`);
+}
+
+/* Бесплатный ChatGPT после нескольких файлов молча перестаёт их принимать, а причину пишет только в меню «+». */
+async function uploadQuota(page, site) {
+  if (site !== 'chatgpt') return '';
+  const plus = await page.$('button[aria-label="Добавить файлы и другое"], button[aria-label="Add files and more"], button[aria-label="Aggiungi file e altro"]');
+  if (!plus) return '';
+  await plus.click().catch(() => {});
+  await sleep(1000);
+  const text = await page.evaluate(() => document.body.innerText).catch(() => '');
+  await page.keyboard.press('Escape');
+  await sleep(300);
+  const m = text.match(/(Перейти на Plus, чтобы загружать больше|Upgrade to Plus to upload more|Passa a Plus per caricare)[^\n]*\n?[^\n]*/i);
+  return m ? m[0].replace(/\s+/g, ' ').trim() : '';
 }
 
 async function dismissPopups(page) {
@@ -334,7 +380,15 @@ async function typeText(page, cdp, site, text) {
 
 async function giveFile(page, composer, file, via) {
   if (!via) {
-    const input = await page.$('input[type=file]');
+    const ext = path.extname(file).toLowerCase();
+    const isImage = /^\.(png|jpe?g|gif|webp)$/.test(ext);
+    const inputs = await page.$$('input[type=file]');
+    let input = null;
+    for (const h of inputs) {
+      const accept = await h.evaluate((i) => i.accept || '');
+      const ok = !accept || accept.split(',').some((a) => (a = a.trim().toLowerCase()) === ext || a === '*/*' || (isImage && a === 'image/*'));
+      if (ok) { input = h; if (!accept) break; }
+    }
     if (input) { await input.uploadFile(file); return 'input'; }
     via = 'drop';
   }

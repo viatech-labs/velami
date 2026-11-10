@@ -142,6 +142,12 @@
     'llama', 'meta', 'mistral', 'mixtral', 'grok', 'perplexity', 'deepseek', 'qwen', 'yandexgpt',
     'гигачат', 'gigachat', 'алиса', 'alice', 'siri', 'alexa', 'cortana', 'midjourney', 'dall-e',
     'cursor', 'github', 'velami',
+    // Роли и обращения в начале строки («Cliente: Mario Rossi»): модель иногда принимает их за имя.
+    'cliente', 'clienti', 'titolare', 'intestatario', 'intestataria', 'contatto', 'utente', 'firmatario', 'firmataria',
+    'responsabile', 'referente', 'destinatario', 'mittente', 'richiedente', 'dipendente', 'collaboratore', 'agente',
+    'signore', 'signora', 'gentile', 'egregio', 'spettabile', 'dottore', 'dottoressa', 'avvocato',
+    'client', 'customer', 'contact', 'user', 'owner', 'holder', 'sender', 'recipient', 'applicant', 'employee', 'dear', 'mister', 'madam',
+    'клиент', 'клиентка', 'заявитель', 'получатель', 'отправитель', 'владелец', 'пользователь', 'сотрудник', 'уважаемый', 'уважаемая', 'господин', 'госпожа',
   ]);
 
   function accept(entity, text) {

@@ -434,13 +434,68 @@
 
   function processText(node) {
     const v = node.nodeValue;
-    if (!v || !TOKEN_TEST.test(v)) return;
+    if (!v) return;
     const p = node.parentElement;
     if (!p || p.closest(SKIP) || host.contains(p)) return;
+    if (!TOKEN_TEST.test(v)) {
+      if (PIECE.test(v)) restoreAcross(p);
+      return;
+    }
     const r = PG.rehydrate(v, byToken);
     if (!r.spans.length) return;
     node.nodeValue = r.text;
     restored.set(node, r.spans.map((s) => ({ start: s.start, end: s.end, token: s.token, value: r.text.slice(s.start, s.end) })));
+    scheduleHighlights();
+  }
+
+  /* ChatGPT при выводе ответа кладёт каждый кусок в свой элемент: «[», «[PERSON», «_», «1]]».
+     Метка целиком видна только у общего предка. Значение встаёт в узел, где метка начиналась,
+     из остальных узлов уходят её куски. Сами узлы не удаляются: ими владеет сайт. */
+  const PIECE = /[[\]_\d]/;
+  const ACROSS_LEVELS = 4;
+  const ACROSS_MAX = 4000;
+  function restoreAcross(start) {
+    let el = start;
+    let found = false;
+    for (let i = 0; el && i < ACROSS_LEVELS && !found; i++) {
+      const t = el.textContent;
+      if (t.length > ACROSS_MAX) return;
+      if (TOKEN_TEST.test(t)) found = true;
+      else el = el.parentElement;
+    }
+    if (!found || el.closest(SKIP) || host.contains(el)) return;
+    const nodes = [];
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n; (n = w.nextNode());) if (!n.parentElement.closest(SKIP)) nodes.push(n);
+    const texts = nodes.map((n) => n.nodeValue);
+    const starts = [];
+    let all = '';
+    for (const t of texts) { starts.push(all.length); all += t; }
+    const at = (pos) => { let i = starts.length - 1; while (i > 0 && starts[i] > pos) i--; return i; };
+    const re = new RegExp(PG.TOKEN_SOURCE + '|' + PG.LOOSE_SOURCE, 'g');
+    const hits = [];
+    for (let m; (m = re.exec(all));) {
+      const token = m[1] ? `[[${m[1]}_${m[2]}]]` : `[[${m[3]}_${m[4]}]]`;
+      if (byToken[token] != null) hits.push({ a: m.index, b: m.index + m[0].length, token, value: String(byToken[token]) });
+    }
+    if (!hits.length) return;
+    const marks = new Map();
+    for (const h of hits.reverse()) {
+      const first = at(h.a);
+      const last = at(h.b - 1);
+      for (let i = last; i >= first; i--) {
+        const from = Math.max(h.a, starts[i]) - starts[i];
+        const to = Math.min(h.b, starts[i] + nodes[i].nodeValue.length) - starts[i];
+        texts[i] = texts[i].slice(0, from) + (i === first ? h.value : '') + texts[i].slice(to);
+      }
+      const list = marks.get(first) || [];
+      const from = h.a - starts[first];
+      list.forEach((s) => { s.start += h.value.length - (Math.min(h.b, starts[first] + nodes[first].nodeValue.length) - h.a); s.end = s.start + s.value.length; });
+      list.push({ start: from, end: from + h.value.length, token: h.token, value: h.value });
+      marks.set(first, list);
+    }
+    nodes.forEach((n, i) => { if (texts[i] !== n.nodeValue) n.nodeValue = texts[i]; });
+    for (const [i, spans] of marks) restored.set(nodes[i], spans);
     scheduleHighlights();
   }
 
