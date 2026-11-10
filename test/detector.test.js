@@ -69,6 +69,17 @@ test('маскирование: одинаковые значения дают �
   assert.equal(back.spans.length, 3);
 });
 
+test('метка без скобок из ответа модели возвращается, если она есть в хранилище', () => {
+  const vault = new PG.Vault();
+  PG.maskText('Firmato: Luca Bianchi, email l.b@example.com', { vault, commit: true, auto: [{ term: 'Luca Bianchi', type: 'PERSON' }] });
+  const t = vault.data.byToken;
+  assert.equal(PG.rehydrate('Il documento è firmato da PERSON_1.', t).text, 'Il documento è firmato da Luca Bianchi.');
+  assert.equal(PG.rehydrate('Firma: [PERSON_1], mail EMAIL_1', t).text, 'Firma: Luca Bianchi, mail l.b@example.com');
+  const r = PG.rehydrate('PERSON_7, UTF_8, ERROR_404, xPERSON_1, PERSON_1x, PERSON_12', t);
+  assert.equal(r.text, 'PERSON_7, UTF_8, ERROR_404, xPERSON_1, PERSON_1x, PERSON_12');
+  assert.equal(r.spans.length, 0);
+});
+
 test('предпросмотр без commit не меняет хранилище и нумерует новые значения по порядку', () => {
   const vault = new PG.Vault();
   const r = PG.maskText('x@y.it и z@y.it', { vault, commit: false });

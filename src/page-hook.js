@@ -25,7 +25,7 @@
   const clip = window.Clipboard ? Clipboard.prototype : null;
   const origWriteText = clip && clip.writeText;
   const origWrite = clip && clip.write;
-  const HAS_TOKEN = /\[\[\s*[A-Z]+(?:_[A-Z]+)*[_ ]\d+\s*\]\]/;
+  const HAS_TOKEN = /\[\[\s*[A-Z]+(?:_[A-Z]+)*[_ ]\d+\s*\]\]|(?<![A-Za-z0-9_])[A-Z]+(?:_[A-Z]+)*_\d+(?![A-Za-z0-9_])/;
 
   /* ---------- мост ---------- */
 

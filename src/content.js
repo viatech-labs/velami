@@ -426,7 +426,7 @@
 
   /* ---------- подстановка настоящих значений в ответы ---------- */
 
-  const TOKEN_TEST = new RegExp(PG.TOKEN_SOURCE);
+  const TOKEN_TEST = new RegExp(PG.TOKEN_SOURCE + '|' + PG.LOOSE_SOURCE);
   const SKIP = 'textarea, script, style, noscript, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]';
   const restored = new Map();
   const canHighlight = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight !== 'undefined';
@@ -434,7 +434,7 @@
 
   function processText(node) {
     const v = node.nodeValue;
-    if (!v || v.indexOf('[[') < 0 || !TOKEN_TEST.test(v)) return;
+    if (!v || !TOKEN_TEST.test(v)) return;
     const p = node.parentElement;
     if (!p || p.closest(SKIP) || host.contains(p)) return;
     const r = PG.rehydrate(v, byToken);

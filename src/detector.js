@@ -508,14 +508,19 @@
     return applyFindings(text, locate(text, opts.candidates || []), opts);
   }
 
+  /* Модели иногда теряют скобки метки: «PERSON_2», «[PERSON_2]», чаще всего внутри жирного шрифта.
+     Такая форма заменяется, только если метка есть в хранилище. */
+  const LOOSE_SOURCE = '\\[?(?<![A-Za-z0-9_])([A-Z]+(?:_[A-Z]+)*)_(\\d+)(?![A-Za-z0-9_])\\]?';
+  const rehydrateRe = () => new RegExp(TOKEN_SOURCE + '|' + LOOSE_SOURCE, 'g');
+
   function rehydrate(text, byToken) {
     const spans = [];
-    const re = tokenRe();
+    const re = rehydrateRe();
     let out = '';
     let cursor = 0;
     let m;
     while ((m = re.exec(text))) {
-      const token = `[[${m[1]}_${m[2]}]]`;
+      const token = m[1] ? `[[${m[1]}_${m[2]}]]` : `[[${m[3]}_${m[4]}]]`;
       const value = byToken[token];
       if (value == null) continue;
       out += text.slice(cursor, m.index);
@@ -538,7 +543,7 @@
   }
 
   return {
-    LABELS, DICT_TYPES, TOKEN_SOURCE, tokenRe, typeOfToken,
+    LABELS, DICT_TYPES, TOKEN_SOURCE, LOOSE_SOURCE, tokenRe, typeOfToken,
     detect, nameVariants, maskText, maskKnown, candidatesFrom, locate, rehydrate, findLeaks, Vault,
     checks: { luhn, ibanValid, cfValid, pivaValid, innValid, snilsValid },
   };
