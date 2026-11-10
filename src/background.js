@@ -9,7 +9,7 @@ const OPTIONAL_SITES = SITES.SITES.filter((x) => x.optional);
 const LANGUAGES = ['auto', 'en', 'it', 'ru'];
 const LOG_LIMIT = 300;
 const BODY_LIMIT = 20000;
-const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'setImagesAsk']);
+const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'cleanDoc', 'setImagesAsk']);
 const MAX_EXTRACT = 30 * 1024 * 1024;
 
 let state = null;
@@ -269,6 +269,7 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
     .concat(candidates(s));
   const out = [];
   const byType = {};
+  const values = new Map();
   let count = 0;
   let created = 0;
   for (let i = 0; i < list.length; i++) {
@@ -280,6 +281,7 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
       count++;
       byType[f.type] = (byType[f.type] || 0) + 1;
       if (f.isNew) created++;
+      if (file && f.token) values.set(f.id + '\u0000' + f.value, { id: f.id, type: f.type, value: f.value, token: f.token });
     }
   }
   const remaining = countRemaining(out.filter((_, i) => trusted && trusted[i]), s)
@@ -291,7 +293,7 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
     stats(s).masked += count;
     await persist(created ? ['vault', 'stats'] : ['stats']);
   }
-  return { texts: out, summary };
+  return file ? { texts: out, summary, values: [...values.values()] } : { texts: out, summary };
 }
 
 const LOG_FIELDS = ['kind', 'channel', 'host', 'path', 'method', 'file', 'summary', 'texts', 'body', 'reason', 'note', 'types', 'requests'];
@@ -412,6 +414,21 @@ async function extractFile({ name, data }) {
   return r || { reason: 'broken' };
 }
 
+/* Тот же документ Office с метками. Метки берутся из хранилища, а не из сообщения страницы:
+   страница называет только значения, найденные в этом файле при maskBatch. */
+async function cleanDocFile({ name, data, values }) {
+  if (typeof data !== 'string' || data.length > MAX_EXTRACT * 4 / 3 + 4) return { error: 'big' };
+  const s = await load();
+  const list = [];
+  for (const v of Array.isArray(values) ? values.slice(0, 5000) : []) {
+    const token = v && typeof v.id === 'string' ? s.vault.peek(v.id) : null;
+    if (token && typeof v.value === 'string' && v.value) list.push({ id: v.id, type: PG.typeOfToken(token), value: v.value, token });
+  }
+  await ensureOffscreen();
+  const r = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'clean', name: String(name || ''), data, values: list });
+  return r || { error: 'no reply' };
+}
+
 async function setExclusion({ id, excluded }) {
   const s = await load();
   const set = new Set(s.settings.exclusions);
@@ -433,6 +450,7 @@ async function handle(msg, sender) {
     case 'scan': return scan(msg, sender);
     case 'setExclusion': return setExclusion(msg);
     case 'extractFile': return extractFile(msg);
+    case 'cleanDoc': return cleanDocFile(msg);
     case 'setImagesAsk': return setSettings({ askImages: !!msg.ask });
     case 'open':
       await chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html#' + (msg.page || 'log')) });

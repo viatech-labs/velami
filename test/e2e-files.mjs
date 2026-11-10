@@ -4,6 +4,8 @@ import puppeteer from 'puppeteer';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { inflateRawSync } from 'node:zlib';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,6 +15,33 @@ const out = path.join(root, 'test', 'artifacts', 'files');
 mkdirSync(out, { recursive: true });
 
 const SECRETS = ['mario.rossi@example.com', '4111 1111 1111 1111', 'IT60 X054 2811 1010 0000 0123 456', 'RSSMRA85T10A562S'];
+const LEFT = /Rossi|Bianchi|Verdi|example\.com|example%40|RSSMRA|4111|IT60 ?X054|347 ?123/i;
+const OFFICE = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+const Office = createRequire(import.meta.url)(path.join(root, 'src', 'office.js'));
+
+function unzipAll(buf, prefix = '') {
+  const out = {};
+  let end = buf.length - 22;
+  while (buf.readUInt32LE(end) !== 0x06054b50) end--;
+  let p = buf.readUInt32LE(end + 16);
+  for (let n = buf.readUInt16LE(end + 10); n > 0; n--) {
+    const size = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28);
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen);
+    const h = buf.readUInt32LE(p + 42);
+    const start = h + 30 + buf.readUInt16LE(h + 26) + buf.readUInt16LE(h + 28);
+    const raw = buf.subarray(start, start + size);
+    const data = buf.readUInt16LE(p + 10) === 8 ? inflateRawSync(raw) : raw;
+    out[prefix + name] = data;
+    if (/\.(docx|xlsx|pptx)$/i.test(name) && data.length) Object.assign(out, unzipAll(data, prefix + name + '!'));
+    p += 46 + nameLen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  return out;
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (name, fn) => { fn(); results.push(name); console.log('  ✓ ' + name); };
@@ -23,8 +52,13 @@ const PAGE = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>
 <input type="file" id="file" multiple><div id="drop" style="margin-top:12px;padding:30px;border:2px dashed #aaa">Trascina qui</div>
 <script>
 window.__got = [];
+window.__bin = {};
 async function upload(f, via) {
   window.__got.push({ name: f.name, size: f.size, type: f.type, via });
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  window.__bin[f.name] = { type: f.type, data: btoa(bin) };
   await fetch('https://files.example/upload/' + encodeURIComponent(f.name), { method: 'PUT', body: f });
 }
 document.getElementById('file').onchange = (e) => { for (const f of e.target.files) upload(f, 'input'); };
@@ -163,13 +197,48 @@ try {
   });
   assert.equal(await page.$eval('#file', (i) => i.files.length), 0);
 
-  /* PowerPoint: копия. */
-  await pick('presentazione.pptx');
-  await press('Invia copia pulita');
-  const pptx = await waitUpload('presentazione.pptx.txt');
-  check('PowerPoint: копия с метками, адрес из двух фрагментов текста тоже скрыт', () => {
-    assert.ok(pptx && !pptx.includes('mario.rossi@example.com') && pptx.includes('[[EMAIL_1]]'), pptx);
-    assert.ok(!pptx.includes('Mario Rossi'));
+  /* Office: чистая копия в том же формате. Проверяются сырые байты каждой части пакета. */
+  const sent = async (name) => {
+    await waitUpload(name);
+    const b = await page.evaluate((n) => window.__bin[n], name);
+    return b && { type: b.type, bytes: new Uint8Array(Buffer.from(b.data, 'base64')) };
+  };
+  async function sameFormat(file, sentName, mime, labels) {
+    await pick(file);
+    const text = textOf(await waitDialog());
+    assert.match(text, new RegExp('«' + sentName.replace('.', '\\.') + '»: '), text);
+    await press('Invia copia pulita');
+    const copy = await sent(sentName);
+    assert.ok(copy, 'копия ' + sentName + ' не загружена');
+    assert.equal(copy.type, mime);
+    const parts = unzipAll(Buffer.from(copy.bytes));
+    const left = Object.entries(parts).filter(([n, b]) => !/\.(docx|xlsx|pptx)$/.test(n) && LEFT.test(b.toString('latin1')))
+      .map(([n, b]) => n + ': ' + b.toString('latin1').match(LEFT)[0]);
+    assert.deepEqual(left, []);
+    const { text: copyText } = await Office.extract(copy.bytes, sentName);
+    for (const t of labels) assert.ok(copyText.includes(t), 'нет ' + t + ' в ' + copyText.slice(0, 300));
+    return { parts, copyText };
+  }
+
+  const pres = await sameFormat('presentazione.pptx', 'presentazione.pptx', OFFICE.pptx, ['[[EMAIL_1]]', '[[PERSON_1]]']);
+  check('PowerPoint: копия тем же файлом с метками, адрес из двух фрагментов текста тоже скрыт', () => {
+    assert.match(pres.copyText, /Cliente: \[\[PERSON_1\]\]/);
+  });
+
+  const word = await sameFormat('nascosto.docx', 'nascosto.docx', OFFICE.docx, ['[[EMAIL_', '[[IBAN_', '[[CF_', '[[PHONE_']);
+  check('Word: тот же .docx, данные скрыты в правках, комментариях, полях, ссылках и метаданных', () => {
+    assert.match(word.parts['word/document.xml'].toString(), /w:author="Velami"/);
+    assert.match(word.parts['word/comments.xml'].toString(), /\[\[CF_\d+\]\]/);
+  });
+
+  const book = await sameFormat('nascosto.xlsx', 'nascosto.xlsx', OFFICE.xlsx, ['[[CARD_', '[[IBAN_', '[[EMAIL_']);
+  check('Excel: тот же .xlsx, число в ячейке, имя листа, комментарий и колонтитул скрыты', () => {
+    assert.match(book.parts['xl/workbook.xml'].toString(), /name="CF CF_\d+"/);
+  });
+
+  await sameFormat('macro.docm', 'macro.docx', OFFICE.docx, ['[[EMAIL_']);
+  check('Word с макросами: уходит .docx без макросов', () => {
+    assert.equal(uploads['macro.docm'], undefined);
   });
 
   /* Скан без текста: только «как есть» или отмена. */

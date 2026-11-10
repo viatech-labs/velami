@@ -56,7 +56,7 @@
     },
     "allowOriginalFiles": {
       "title": "Allow sending the original of a file with personal data",
-      "description": "false: for PDF and Office files with data found only the clean text copy can be sent.",
+      "description": "false: for PDF and Office files with data found only the clean copy can be sent.",
       "type": "boolean"
     },
     "allowUncheckedFiles": {

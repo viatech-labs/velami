@@ -112,13 +112,34 @@ async function pdfText(bytes) {
   }
 }
 
+const fromBase64 = (data) => Uint8Array.from(atob(String(data || '')), (c) => c.charCodeAt(0));
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 async function extract({ name, data }) {
-  const bytes = Uint8Array.from(atob(String(data || '')), (c) => c.charCodeAt(0));
+  const bytes = fromBase64(data);
   if (/\.pdf$/i.test(name) || (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
     return { kind: 'pdf', ...(await pdfText(bytes)) };
   }
   if (__PGOffice.kindOf(name)) return __PGOffice.extract(bytes, name);
   return { reason: 'unsupported' };
+}
+
+/* Документ Office с метками вместо найденных значений. Готовый файл разбирается заново:
+   если в нём осталось хоть одно значение, копия не отдаётся. */
+async function cleanDoc({ name, data, values }) {
+  const list = (Array.isArray(values) ? values : [])
+    .filter((v) => v && typeof v.id === 'string' && typeof v.value === 'string' && typeof v.token === 'string' && PG.typeOfToken(v.token))
+    .map(({ id, type, value, token }) => ({ id, type: String(type), value, token }));
+  if (!list.length) return { error: 'nothing to clean' };
+  const r = await __PGOffice.clean(fromBase64(data), String(name || ''), list, PG.locate);
+  const check = await __PGOffice.extract(r.bytes, r.name);
+  const left = PG.locate(check.text, list).length;
+  if (left) return { error: 'values left after cleaning', left };
+  return { name: r.name, data: toBase64(r.bytes), replaced: r.replaced, removed: r.removed, emptied: r.emptied };
 }
 
 function touch() {
@@ -134,7 +155,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     ? Promise.all((msg.texts || []).map((t) => recognize(String(t)))).then((results) => ({ results, stats }))
     : msg.type === 'warmup' ? load().then(() => ({ stats }))
       : msg.type === 'extract' ? extract(msg).catch((e) => ({ reason: 'broken', error: String((e && e.message) || e) }))
-        : Promise.resolve({ error: 'unknown' });
+        : msg.type === 'clean' ? cleanDoc(msg).catch((e) => ({ error: String((e && e.message) || e) }))
+          : Promise.resolve({ error: 'unknown' });
   job.then(sendResponse, (e) => sendResponse({ error: String((e && e.message) || e) }));
   return true;
 });

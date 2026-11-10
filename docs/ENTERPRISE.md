@@ -21,7 +21,7 @@ ID from the Chrome Web Store listing.
 | `language` | `auto`, `en`, `it`, `ru` | Interface language |
 | `dictionary` | list of `{ term, type }` | Terms always hidden: client names, projects, internal codes. `type` is `PERSON`, `ORG`, `ADDRESS` or `CUSTOM`. Added to the personal dictionary, the user cannot remove them. Up to 5000 terms |
 | `allowExclusions` | boolean | `false`: the user cannot untick a found value, everything found is always hidden |
-| `allowOriginalFiles` | boolean | `false`: a PDF or Office file with personal data can go only as the clean text copy |
+| `allowOriginalFiles` | boolean | `false`: a PDF or Office file with personal data can go only as the clean copy |
 | `allowUncheckedFiles` | boolean | `false`: scans, images, password protected and unknown files are not sent |
 
 A key that is not set stays the user's choice. Values of the wrong type are ignored. The `allow…`

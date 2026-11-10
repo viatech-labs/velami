@@ -46,6 +46,82 @@ with zipfile.ZipFile(os.path.join(d, 'presentazione.pptx'), 'w', zipfile.ZIP_DEF
 `;
 execFileSync('python3', ['-c', PY, dir], { stdio: 'inherit' });
 
+/* Данные только в скрытых местах: метаданные, автор и текст комментария, удалённый текст правки,
+   поле со ссылкой, внешняя ссылка, надпись, колонтитул, вложенная книга, диаграмма, заметки
+   к слайду, имя листа, число в ячейке, формула, подсказка проверки данных. Нужен python-pptx. */
+const PY_HIDDEN = String.raw`
+import sys, os, io, zipfile
+from docx import Document
+from docx.oxml import parse_xml
+from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.worksheet.datavalidation import DataValidation
+from pptx import Presentation
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
+from pptx.util import Inches
+d = sys.argv[1]
+W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+doc = Document()
+doc.core_properties.author = 'Mario Rossi'
+doc.core_properties.last_modified_by = 'mario.rossi'
+doc.core_properties.title = 'Pratica RSSMRA85T10A562S'
+p = doc.add_paragraph('Contatto principale: mario.')
+p.add_run('rossi@').bold = True
+p.add_run('example.com')
+p = doc.add_paragraph('IBAN corretto: ')
+p._p.append(parse_xml('<w:del %s w:id="1" w:author="Giulia Bianchi" w:date="2026-10-01T10:00:00Z"><w:r><w:delText>IT60 X054 2811 1010 0000 0123 456</w:delText></w:r></w:del>' % W))
+p = doc.add_paragraph()
+p._p.append(parse_xml('<w:r %s><w:fldChar w:fldCharType="begin"/></w:r>' % W))
+p._p.append(parse_xml('<w:r %s><w:instrText xml:space="preserve"> HYPERLINK "mailto:giulia.bianchi@example.com" </w:instrText></w:r>' % W))
+p._p.append(parse_xml('<w:r %s><w:fldChar w:fldCharType="separate"/></w:r>' % W))
+p._p.append(parse_xml('<w:r %s><w:t>scrivici</w:t></w:r>' % W))
+p._p.append(parse_xml('<w:r %s><w:fldChar w:fldCharType="end"/></w:r>' % W))
+rid = doc.part.relate_to('mailto:anna.verdi@example.com', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', is_external=True)
+p = doc.add_paragraph('Assistenza: ')
+p._p.append(parse_xml('<w:hyperlink %s xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="%s"><w:r><w:t>clicca qui</w:t></w:r></w:hyperlink>' % (W, rid)))
+p = doc.add_paragraph('Vedi nota.')
+doc.add_comment(p.runs, text='Verificare il codice RSSMRA85T10A562S', author='Giulia Bianchi', initials='GB')
+doc.sections[0].header.paragraphs[0].text = 'Telefono +39 347 123 4567'
+doc.save(os.path.join(d, 'nascosto.docx'))
+
+src = zipfile.ZipFile(os.path.join(d, 'nascosto.docx'))
+with zipfile.ZipFile(os.path.join(d, 'macro.docm'), 'w', zipfile.ZIP_DEFLATED) as z:
+  for n in src.namelist():
+    b = src.read(n)
+    if n == '[Content_Types].xml':
+      b = b.replace(b'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml', b'application/vnd.ms-word.document.macroEnabled.main+xml')
+      b = b.replace(b'</Types>', b'<Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/></Types>')
+    if n == 'word/_rels/document.xml.rels':
+      b = b.replace(b'</Relationships>', b'<Relationship Id="rIdVba" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" Target="vbaProject.bin"/></Relationships>')
+    z.writestr(n, b)
+  z.writestr('word/vbaProject.bin', b'Attribute VB_Name = "Modulo1"\nMsgBox "mario.rossi@example.com"')
+
+wb = Workbook()
+wb.properties.creator = 'Mario Rossi'
+ws = wb.active; ws.title = 'CF RSSMRA85T10A562S'
+ws['A1'] = 'Carta'; ws['B1'] = 4111111111111111
+ws['A2'] = 'Contatto'; ws['B2'] = '="mario.rossi@example.com"'
+ws['A3'] = 'Nota'; ws['A3'].comment = Comment('IBAN IT60 X054 2811 1010 0000 0123 456', 'Giulia Bianchi')
+ws.oddHeader.center.text = 'giulia.bianchi@example.com'
+dv = DataValidation(type='list', formula1='"si,no"', prompt='Chiedere a anna.verdi@example.com', promptTitle='Aiuto', showInputMessage=True)
+ws.add_data_validation(dv); dv.add('C1')
+wb.save(os.path.join(d, 'nascosto.xlsx'))
+
+prs = Presentation()
+s = prs.slides.add_slide(prs.slide_layouts[5])
+s.shapes.title.text = 'Andamento'
+cd = CategoryChartData()
+cd.categories = ['mario.rossi@example.com', 'giulia.bianchi@example.com']
+cd.add_series('Ordini', (3, 5))
+s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(1), Inches(2), Inches(6), Inches(4), cd)
+s.notes_slide.notes_text_frame.text = 'Codice fiscale del cliente RSSMRA85T10A562S'
+prs.core_properties.author = 'Mario Rossi'
+prs.save(os.path.join(d, 'nascosto.pptx'))
+`;
+execFileSync('python3', ['-c', PY_HIDDEN, dir], { stdio: 'inherit' });
+
 const browser = await puppeteer.launch({ headless: true });
 const page = await browser.newPage();
 const html = (body) => `<!doctype html><meta charset="utf-8"><body style="font:14px Helvetica;margin:40px">${body}</body>`;

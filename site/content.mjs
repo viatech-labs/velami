@@ -73,7 +73,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Attachments too',
-      text: 'Text files are cleaned on the fly. PDF, Word, Excel and PowerPoint are read on your computer and sent as a clean text copy. When a file can’t be checked, like a scan or a photo, Velami asks before it goes out.',
+      text: 'Text files are cleaned on the fly. Word, Excel and PowerPoint are read in full on your computer and sent as the same document with labels, PDF as a clean text copy. When a file can’t be checked, like a scan or a photo, Velami asks before it goes out.',
     },
     sites: {
       title: 'Works where you chat',
@@ -181,7 +181,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Anche gli allegati',
-      text: 'I file di testo vengono ripuliti al volo. PDF, Word, Excel e PowerPoint vengono letti sul tuo computer e inviati come copia di testo pulita. Se un file non si può controllare, come una scansione o una foto, Velami te lo chiede prima dell’invio.',
+      text: 'I file di testo vengono ripuliti al volo. Word, Excel e PowerPoint vengono letti per intero sul tuo computer e inviati come lo stesso documento con le etichette, i PDF come copia di testo pulita. Se un file non si può controllare, come una scansione o una foto, Velami te lo chiede prima dell’invio.',
     },
     sites: {
       title: 'Funziona dove chatti',
@@ -289,7 +289,7 @@ export const CONTENT = {
     },
     files: {
       title: 'И вложения тоже',
-      text: 'Текстовые файлы очищаются на лету. PDF, Word, Excel и PowerPoint читаются на вашем компьютере и уходят чистой текстовой копией. Если файл проверить нельзя, например скан или фото, Velami спросит перед отправкой.',
+      text: 'Текстовые файлы очищаются на лету. Word, Excel и PowerPoint целиком читаются на вашем компьютере и уходят тем же документом с метками, PDF чистой текстовой копией. Если файл проверить нельзя, например скан или фото, Velami спросит перед отправкой.',
     },
     sites: {
       title: 'Работает там, где вы общаетесь',

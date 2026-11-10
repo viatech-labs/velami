@@ -49,9 +49,10 @@ Russian names and street addresses. See [docs/MODEL.md](docs/MODEL.md) for accur
 **Your dictionary:** clients, projects, internal codes. Checked before the model, with Russian
 case endings.
 
-**Files:** text files are cleaned in place. PDF, Word, Excel and PowerPoint are read locally and
-sent as a clean text copy if they contain personal data. Files Velami cannot read, such as scans
-and images, are held back until you decide.
+**Files:** text files are cleaned in place. Word, Excel and PowerPoint are read locally in full,
+including metadata, comments and their authors, tracked changes, fields, links, charts and embedded
+workbooks, and go out as the same document with labels instead of the data. PDF goes out as a clean
+text copy. Files Velami cannot read, such as scans and images, are held back until you decide.
 
 ## You can check it yourself
 

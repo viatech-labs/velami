@@ -608,6 +608,11 @@
   const DOC_EXT = /\.(pdf|docx|docm|xlsx|xlsm|pptx|pptm)$/i;
   const DOC_MIME = /^application\/(pdf|vnd\.openxmlformats-officedocument\.)/i;
   const IMAGE = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?|avif|svg)$/i;
+  const OFFICE_MIME = {
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  };
   const checkedFiles = new Set();
   const replayed = new WeakSet();
   const fileJobs = new WeakMap();
@@ -714,7 +719,7 @@
   }
 
   /* PDF и Office: текст достаёт offscreen-документ расширения. Если в тексте есть данные,
-     пользователь выбирает: текстовая копия с метками, оригинал или отмена. */
+     пользователь выбирает: копия с метками (Office тем же форматом, PDF текстом), оригинал или отмена. */
   async function cleanDoc(f) {
     if (f.size > MAX_DOC_FILE) return askUnchecked(f, 'big', { mb: 30 });
     toast('ok', tr('file.reading', { name: f.name }), 20000);
@@ -737,12 +742,15 @@
       toast('ok', tr('file.clean', { name: f.name }), 6000);
       return f;
     }
+    const office = r.kind !== 'pdf';
+    const sameName = office ? f.name.replace(/\.(doc|xls|ppt)m$/i, (x, k) => '.' + k + 'x') : '';
     const copyName = f.name + '.txt';
     const noOriginal = policy.allowOriginalFiles === false;
     const choice = await ask({
       title: tr('file.doc.title', { name: f.name }),
-      text: tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
+      text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName }) : tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
       note: [unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
+        office && r.images ? tr('file.doc.images', { n: r.images }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
         noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
       buttons: [
         { id: 'cancel', label: tr('file.ask.cancel') },
@@ -752,10 +760,22 @@
     });
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
+    if (office) {
+      const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
+      if (c && !c.error && c.data) {
+        const bytes = Uint8Array.from(atob(c.data), (ch) => ch.charCodeAt(0));
+        const file = new File([bytes], c.name, { type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, lastModified: f.lastModified });
+        checkedFiles.add(sigOf(file));
+        send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.sameFormat', { copy: c.name }) } }).catch(() => {});
+        toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.sameFormat', { copy: c.name }), 7000);
+        return file;
+      }
+    }
     const file = new File([m.texts[0]], copyName, { type: 'text/plain', lastModified: f.lastModified });
     checkedFiles.add(sigOf(file));
-    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.converted', { copy: copyName }) } }).catch(() => {});
-    toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.converted', { copy: copyName }), 7000);
+    const how = tr(office ? 'file.sameFailed' : 'file.converted', { copy: copyName });
+    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how } }).catch(() => {});
+    toast(office ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
     return file;
   }
 
