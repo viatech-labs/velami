@@ -60,3 +60,27 @@ for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) copyFileSync(path.join(pd
 cpSync(path.join(pdfSrc, 'cmaps'), path.join(pdfDst, 'cmaps'), { recursive: true });
 writeFileSync(path.join(pdfDst, 'LICENSE.txt'), `PDF.js ${pdfVersion}, https://github.com/mozilla/pdf.js\n\n` + readFileSync(path.join(pdfSrc, 'LICENSE'), 'utf8'));
 console.log(`vendor/pdfjs: pdf.js ${pdfVersion}, cmaps`);
+
+/* Tesseract: распознавание текста на картинках. Одна сборка ядра (SIMD, только LSTM, wasm внутри .js):
+   Chrome 116+ поддерживает SIMD везде. Модели языков tessdata_best в 8-битном виде, сжатые gzip. */
+const tessVersion = version('tesseract.js');
+const coreVersion = version('tesseract.js-core');
+const tessDst = path.join(root, 'vendor/tesseract');
+rmSync(tessDst, { recursive: true, force: true });
+mkdirSync(path.join(tessDst, 'lang'), { recursive: true });
+for (const f of ['tesseract.min.js', 'worker.min.js']) copyFileSync(path.join(root, 'node_modules/tesseract.js/dist', f), path.join(tessDst, f));
+copyFileSync(path.join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js'), path.join(tessDst, 'tesseract-core-simd-lstm.wasm.js'));
+const LANGS = ['eng', 'ita', 'rus'];
+for (const l of LANGS) {
+  version(`@tesseract.js-data/${l}`);
+  copyFileSync(path.join(root, `node_modules/@tesseract.js-data/${l}/4.0.0_best_int/${l}.traineddata.gz`), path.join(tessDst, 'lang', `${l}.traineddata.gz`));
+}
+writeFileSync(path.join(tessDst, 'LICENSE.txt'), [
+  `Tesseract.js ${tessVersion}, https://github.com/naptha/tesseract.js`,
+  `Tesseract.js-core ${coreVersion}, https://github.com/naptha/tesseract.js-core (Tesseract OCR, Leptonica)`,
+  `Language data ${LANGS.join(', ')}: tessdata_best, https://github.com/tesseract-ocr/tessdata_best`,
+  '',
+  readFileSync(path.join(root, 'node_modules/tesseract.js/LICENSE.md'), 'utf8'),
+  readFileSync(path.join(root, 'node_modules/tesseract.js-core/LICENSE'), 'utf8'),
+].join('\n'));
+console.log(`vendor/tesseract: tesseract.js ${tessVersion}, core ${coreVersion}, ${LANGS.join('+')}`);

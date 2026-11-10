@@ -68,6 +68,7 @@ const BUTTONS = {
   original: /^(Invia l’originale|Send original|Отправить оригинал)$/,
   cancel: /^(Annulla|Cancel|Отмена)$/,
 };
+const LIMIT_REACHED = /Досягнуто ліміт повідомлень|Ви досягли ліміту повідомлень|Вы достигли лимита|You've reached (your|the) (message )?limit|You have reached (your|the) (message )?limit|Hai raggiunto il limite|limite di messaggi raggiunto|Message limit reached/i;
 const TOKEN = /\[\[[A-Z_]+_\d+\]\]|(?<![A-Za-z0-9_])\[?(PERSON|EMAIL|CARD|IBAN|CF|PHONE|DOB|PASSPORT|PLATE|SECRET|ADDRESS)_\d+\]?(?![A-Za-z0-9_])/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new WeakMap();
@@ -281,6 +282,9 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
   const problems = [];
   const extra = {};
   if (leaked.length) problems.push('УТЕЧКА: ' + leaked.join(', '));
+  /* Бесплатный аккаунт упёрся в лимит: модель не ответила, проверять нечего, кроме утечек. */
+  const limit = !leaked.length && pageText.match(LIMIT_REACHED);
+  if (limit) return { ok: null, skipped: 'у аккаунта кончился лимит сообщений: ' + limit[0], requests: sent.length, labelsSeen };
   /* Если ушло сообщение или чистая копия, метки обязаны быть в перехваченном трафике.
      Нет меток: скрипт не видел нужный запрос, и «утечки нет» ничего не доказывает. */
   if ((sentMessage && secrets.length) || c.press === 'clean' || (c.file && !c.press)) {

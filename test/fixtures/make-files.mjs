@@ -124,6 +124,7 @@ execFileSync('python3', ['-c', PY_HIDDEN, dir], { stdio: 'inherit' });
 
 const browser = await puppeteer.launch({ headless: true });
 const page = await browser.newPage();
+await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
 const html = (body) => `<!doctype html><meta charset="utf-8"><body style="font:14px Helvetica;margin:40px">${body}</body>`;
 await page.setContent(html(`<h1>Estratto conto</h1><p>Intestatario: Mario Rossi, codice fiscale RSSMRA85T10A562S.</p>
 <p>Email mario.rossi@example.com, IBAN IT60 X054 2811 1010 0000 0123 456.</p>
@@ -136,11 +137,46 @@ const para = '<p>Il gruppo di lavoro ha verificato i moduli di gestione degli or
 await page.setContent(html('<h1>Relazione di avanzamento</h1>' + para.repeat(140) + '<p>Firmato: Luca Bianchi, responsabile del progetto.</p>'));
 writeFileSync(path.join(dir, 'relazione-lunga.pdf'), await page.pdf({ format: 'A4' }));
 
-await page.setContent(html('<p style="font-size:28px">Mario Rossi, mario.rossi@example.com</p>'));
+await page.setContent(html('<p style="font-size:28px;color:#222;background:#fff">Mario Rossi, mario.rossi@example.com</p>'));
 const shot = await page.screenshot({ encoding: 'base64', clip: { x: 0, y: 0, width: 700, height: 120 } });
 await page.setContent(html(`<img src="data:image/png;base64,${shot}" width="700">`));
 writeFileSync(path.join(dir, 'scansione.pdf'), await page.pdf({ format: 'A4' }));
+
+/* Картинки для OCR: снимок экрана с данными, фото по-русски с GPS в EXIF, картинка без текста. */
+await page.setViewport({ width: 820, height: 320 });
+const card = (body) => `<!doctype html><meta charset="utf-8"><body style="margin:0;background:#fff;color:#222">${body}</body>`;
+await page.setContent(card(`<div style="font:18px Helvetica;line-height:1.6;padding:10px;border:1px solid #ccc;width:700px">
+<b>Bonifico SEPA</b><br>Beneficiario: Mario Rossi<br>IBAN IT60 X054 2811 1010 0000 0123 456<br>
+Email mario.rossi@example.com, telefono +39 333 123 4567<br>Codice fiscale RSSMRA85T10A562S<br>Importo 1.250,50 EUR</div>`));
+writeFileSync(path.join(dir, 'bonifico.png'), await page.screenshot({ clip: { x: 0, y: 0, width: 800, height: 300 } }));
+await page.setContent(card(`<div style="font:20px Helvetica;line-height:1.6;padding:10px;width:740px">Клиент: Мария Петрова<br>
+Телефон +7 916 123-45-67<br>Почта maria.petrova@example.com<br>Встреча в четверг в 15:00</div>`));
+writeFileSync(path.join(dir, 'chat-ru.raw.jpg'), await page.screenshot({ type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: 800, height: 220 } }));
+await page.setContent(card('<div style="width:800px;height:300px;background:linear-gradient(135deg,#4a90d9,#f5c26b)"></div>'));
+writeFileSync(path.join(dir, 'paesaggio.png'), await page.screenshot({ clip: { x: 0, y: 0, width: 400, height: 200 } }));
 await browser.close();
+
+/* EXIF с автором и координатами GPS (Pillow): после очистки их быть не должно. Документ Word,
+   где данные есть только на вставленной картинке. */
+execFileSync('python3', ['-c', String.raw`
+import os, sys
+from PIL import Image
+from docx import Document
+from docx.shared import Cm
+d = sys.argv[1]
+raw = os.path.join(d, 'chat-ru.raw.jpg')
+im = Image.open(raw)
+exif = Image.Exif()
+exif[0x013B] = 'Maria Petrova'
+exif[0x8825] = {1: 'N', 2: (45.0, 28.0, 12.0), 3: 'E', 4: (9.0, 11.0, 30.0)}
+im.save(os.path.join(d, 'chat-ru.jpg'), quality=92, exif=exif)
+os.remove(raw)
+doc = Document()
+doc.add_paragraph('Allego la ricevuta del bonifico.')
+doc.add_picture(os.path.join(d, 'bonifico.png'), width=Cm(15))
+doc.core_properties.author = 'Velami'
+doc.save(os.path.join(d, 'ricevuta.docx'))
+`, dir], { stdio: 'inherit' });
 
 // PDF с паролем (pypdf): такой файл не читается и не должен уйти молча.
 execFileSync('python3', ['-c', `import sys

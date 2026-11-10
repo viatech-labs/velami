@@ -17,12 +17,12 @@ ID from the Chrome Web Store listing.
 | `enabled` | boolean | `true` keeps protection always on |
 | `rehydrate` | boolean | Real values shown in answers |
 | `model` | boolean | Local name and address model. `false` for computers with little memory |
-| `askImages` | boolean | Ask before sending images |
+| `askImages` | boolean | Ask before sending images Velami cannot read (HEIC, TIFF, SVG, AVIF) |
 | `language` | `auto`, `en`, `it`, `ru` | Interface language |
 | `dictionary` | list of `{ term, type }` | Terms always hidden: client names, projects, internal codes. `type` is `PERSON`, `ORG`, `ADDRESS` or `CUSTOM`. Added to the personal dictionary, the user cannot remove them. Up to 5000 terms |
 | `allowExclusions` | boolean | `false`: the user cannot untick a found value, everything found is always hidden |
 | `allowOriginalFiles` | boolean | `false`: a PDF or Office file with personal data can go only as the clean copy |
-| `allowUncheckedFiles` | boolean | `false`: scans, images, password protected and unknown files are not sent |
+| `allowUncheckedFiles` | boolean | `false`: files Velami cannot check (images in unsupported formats, password protected and unknown files) are not sent |
 
 A key that is not set stays the user's choice. Values of the wrong type are ignored. The `allow…`
 keys default to `true`.

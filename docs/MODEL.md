@@ -145,7 +145,7 @@ times, the table shows the range over several runs.
 |---|---|
 | Load on first use | 0.5–0.8 s |
 | Offscreen document memory with the model loaded | 253 MB |
-| Package size | 186 MB |
+| Package size | 198 MB |
 
 The number of threads is one less than the number of cores, at most 4. Almost all of a short check
 goes into unpacking the 8-bit weights, which does not depend on text length and is split between

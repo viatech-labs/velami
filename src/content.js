@@ -663,6 +663,9 @@
   const DOC_EXT = /\.(pdf|docx|docm|xlsx|xlsm|pptx|pptm)$/i;
   const DOC_MIME = /^application\/(pdf|vnd\.openxmlformats-officedocument\.)/i;
   const IMAGE = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?|avif|svg)$/i;
+  const OCR_IMAGE = /\.(png|jpe?g|gif|webp|bmp)$/i;
+  const OCR_IMAGE_MIME = /^image\/(png|jpeg|gif|webp|bmp)$/i;
+  const MAX_IMAGE_FILE = 20 * 1024 * 1024;
   const OFFICE_MIME = {
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -676,6 +679,7 @@
   const isTextFile = (f) => looksText(f) && f.size <= MAX_TEXT_FILE;
   const isDoc = (f) => DOC_EXT.test(f.name) || DOC_MIME.test(f.type);
   const isImage = (f) => /^image\//i.test(f.type) || IMAGE.test(f.name);
+  const isReadableImage = (f) => OCR_IMAGE_MIME.test(f.type) || (!/^image\//i.test(f.type) && OCR_IMAGE.test(f.name));
   let askImages = true;
   let policy = {};
 
@@ -773,6 +777,8 @@
     return btoa(bin);
   }
 
+  const fromBase64 = (data) => Uint8Array.from(atob(data), (ch) => ch.charCodeAt(0));
+
   /* PDF и Office: текст достаёт offscreen-документ расширения. Если в тексте есть данные,
      пользователь выбирает: копия с метками (Office тем же форматом, PDF текстом), оригинал или отмена. */
   async function cleanDoc(f) {
@@ -805,7 +811,7 @@
       title: tr('file.doc.title', { name: f.name }),
       text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName }) : tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
       note: [unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
-        office && r.images ? tr('file.doc.images', { n: r.images }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
+        office && r.images > (r.imagesRead || 0) ? tr('file.doc.images', { n: r.images - (r.imagesRead || 0) }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
         noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
       buttons: [
         { id: 'cancel', label: tr('file.ask.cancel') },
@@ -818,8 +824,7 @@
     if (office) {
       const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
       if (c && !c.error && c.data) {
-        const bytes = Uint8Array.from(atob(c.data), (ch) => ch.charCodeAt(0));
-        const file = new File([bytes], c.name, { type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, lastModified: f.lastModified });
+        const file = new File([fromBase64(c.data)], c.name, { type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, lastModified: f.lastModified });
         checkedFiles.add(sigOf(file));
         send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.sameFormat', { copy: c.name }) } }).catch(() => {});
         toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.sameFormat', { copy: c.name }), 7000);
@@ -831,6 +836,69 @@
     const how = tr(office ? 'file.sameFailed' : 'file.converted', { copy: copyName });
     send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how } }).catch(() => {});
     toast(office ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
+    return file;
+  }
+
+  /* Картинка: текст на ней читает OCR в offscreen-документе. Без данных уходит та же картинка без
+     метаданных (EXIF, GPS), с данными пользователь выбирает: та же картинка с закрытыми местами,
+     оригинал или отмена. Копии в другом формате нет: если закрыть не вышло, картинка не уходит. */
+  async function cleanImage(f) {
+    if (f.size > MAX_IMAGE_FILE) return askUnchecked(f, 'big', { mb: 20 });
+    toast('ok', tr('file.readingImage', { name: f.name }), 20000);
+    const data = toBase64(await f.arrayBuffer());
+    const r = await send({ type: 'extractFile', name: f.name, data });
+    toastEl.hidden = true;
+    if (!r || r.error) throw new Error((r && r.error) || tr('err.noReply'));
+    if (r.reason) return askUnchecked(f, r.reason === 'unsupported' ? 'image' : r.reason, { mb: 20 });
+    const metaNote = r.meta && r.meta.length ? ' ' + tr('file.img.meta') : '';
+    const same = () => {
+      if (!r.stripped) { checkedFiles.add(sigOf(f)); return f; }
+      const file = new File([fromBase64(r.stripped)], f.name, { type: f.type, lastModified: f.lastModified });
+      checkedFiles.add(sigOf(file));
+      return file;
+    };
+    const text = String(r.text || '');
+    if (!text.trim()) {
+      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: { count: 0, byType: {} }, note: tr('file.img.noText', { name: f.name }) + metaNote } }).catch(() => {});
+      toast('ok', tr('file.img.noText', { name: f.name }) + metaNote, 6000);
+      return same();
+    }
+    const m = await send({ type: 'maskBatch', texts: [text], trusted: [true], file: true });
+    if (!m || m.error) throw new Error((m && m.error) || tr('err.noReply'));
+    if (m.disabled) return f;
+    const unnamed = !!m.summary.model;
+    if (!m.summary.count) {
+      if (unnamed) return askUnchecked(f, 'names');
+      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: text } }).catch(() => {});
+      toast('ok', tr('file.img.clean', { name: f.name }) + metaNote, 6000);
+      return same();
+    }
+    const types = typesText(m.summary);
+    const noOriginal = policy.allowOriginalFiles === false;
+    const choice = await ask({
+      title: tr('file.doc.title', { name: f.name }),
+      text: tr('file.img.found', { n: m.summary.count, types }),
+      note: [tr('file.img.note'), unnamed ? tr('file.doc.names') : '', noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
+      buttons: [
+        { id: 'cancel', label: tr('file.ask.cancel') },
+        noOriginal ? null : { id: 'original', label: tr('file.doc.original') },
+        { id: 'clean', label: tr('file.doc.clean'), primary: true },
+      ].filter(Boolean),
+    });
+    if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
+    if (choice.choice !== 'clean') return cancelled(f);
+    toast('ok', tr('file.covering', { name: f.name }), 20000);
+    const c = await send({ type: 'cleanDoc', name: f.name, data, values: m.values || [] }).catch((e) => ({ error: String(e) }));
+    toastEl.hidden = true;
+    if (!c || c.error || !c.data) {
+      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.failed', { name: f.name }) } }).catch(() => {});
+      toast('warn', tr('file.img.failed', { name: f.name }), 9000);
+      return null;
+    }
+    const file = new File([fromBase64(c.data)], c.name, { type: c.type || f.type, lastModified: f.lastModified });
+    checkedFiles.add(sigOf(file));
+    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.sent') } }).catch(() => {});
+    toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.img.sent'), 7000);
     return file;
   }
 
@@ -858,6 +926,7 @@
     if (isTextFile(f)) return cleanFile(f);
     if (looksText(f)) return askUnchecked(f, 'big', { mb: 2 });
     if (isDoc(f)) return cleanDoc(f);
+    if (isReadableImage(f)) return cleanImage(f);
     return askUnchecked(f, isImage(f) ? 'image' : 'other');
   }
 

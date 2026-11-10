@@ -73,7 +73,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Attachments too',
-      text: 'Text files are cleaned on the fly. Word, Excel and PowerPoint are read in full on your computer and sent as the same document with labels, PDF as a clean text copy. When a file can’t be checked, like a scan or a photo, Velami asks before it goes out.',
+      text: 'Text files are cleaned on the fly. Word, Excel and PowerPoint are read in full on your computer and sent as the same document with labels, PDF as a clean text copy. On screenshots, photos and scans Velami reads the text on your computer and covers the data with labels. When a file can’t be checked, Velami asks before it goes out.',
     },
     sites: {
       title: 'Works where you chat',
@@ -86,7 +86,7 @@ export const CONTENT = {
       cards: [
         ['Company dictionary', 'Client names, projects and internal codes are hidden for every employee. Nobody can remove them.'],
         ['Managed settings', 'Lock the settings through Google Admin, Intune, Group Policy or any Mac MDM. No extra servers.'],
-        ['Files under control', 'Allow only clean copies and hold back scans and images that can’t be checked.'],
+        ['Files under control', 'Allow only clean copies and hold back files that can’t be checked.'],
       ],
       cta: 'Talk to us',
       guide: 'Read the admin guide',
@@ -181,7 +181,7 @@ export const CONTENT = {
     },
     files: {
       title: 'Anche gli allegati',
-      text: 'I file di testo vengono ripuliti al volo. Word, Excel e PowerPoint vengono letti per intero sul tuo computer e inviati come lo stesso documento con le etichette, i PDF come copia di testo pulita. Se un file non si può controllare, come una scansione o una foto, Velami te lo chiede prima dell’invio.',
+      text: 'I file di testo vengono ripuliti al volo. Word, Excel e PowerPoint vengono letti per intero sul tuo computer e inviati come lo stesso documento con le etichette, i PDF come copia di testo pulita. In screenshot, foto e scansioni Velami legge il testo sul tuo computer e copre i dati con le etichette. Se un file non si può controllare, Velami te lo chiede prima dell’invio.',
     },
     sites: {
       title: 'Funziona dove chatti',
@@ -194,7 +194,7 @@ export const CONTENT = {
       cards: [
         ['Dizionario aziendale', 'Nomi dei clienti, progetti e codici interni restano nascosti per ogni dipendente. Nessuno può toglierli.'],
         ['Impostazioni gestite', 'Blocca le impostazioni con Google Admin, Intune, Criteri di gruppo o qualsiasi MDM per Mac. Nessun server in più.'],
-        ['File sotto controllo', 'Permetti solo le copie pulite e trattieni scansioni e immagini che non si possono controllare.'],
+        ['File sotto controllo', 'Permetti solo le copie pulite e trattieni i file che non si possono controllare.'],
       ],
       cta: 'Scrivici',
       guide: 'Leggi la guida per gli amministratori',
@@ -289,7 +289,7 @@ export const CONTENT = {
     },
     files: {
       title: 'И вложения тоже',
-      text: 'Текстовые файлы очищаются на лету. Word, Excel и PowerPoint целиком читаются на вашем компьютере и уходят тем же документом с метками, PDF чистой текстовой копией. Если файл проверить нельзя, например скан или фото, Velami спросит перед отправкой.',
+      text: 'Текстовые файлы очищаются на лету. Word, Excel и PowerPoint целиком читаются на вашем компьютере и уходят тем же документом с метками, PDF чистой текстовой копией. На скриншотах, фото и сканах Velami читает текст прямо на компьютере и закрывает данные метками. Если файл проверить нельзя, Velami спросит перед отправкой.',
     },
     sites: {
       title: 'Работает там, где вы общаетесь',
@@ -302,7 +302,7 @@ export const CONTENT = {
       cards: [
         ['Словарь компании', 'Имена клиентов, проекты и внутренние коды скрываются у каждого сотрудника. Удалить их нельзя.'],
         ['Управляемые настройки', 'Закрепите настройки через Google Admin, Intune, групповые политики или любой MDM для Mac. Без дополнительных серверов.'],
-        ['Файлы под контролем', 'Разрешите только чистые копии и задерживайте сканы и картинки, которые нельзя проверить.'],
+        ['Файлы под контролем', 'Разрешите только чистые копии и задерживайте файлы, которые нельзя проверить.'],
       ],
       cta: 'Написать нам',
       guide: 'Инструкция для администратора',

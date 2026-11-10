@@ -22,6 +22,9 @@ export function checkGenerated(root) {
   for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs', 'cmaps/UniGB-UCS2-H.bcmap']) {
     if (!existsSync(path.join(root, 'vendor/pdfjs', f))) problems.push(`нет vendor/pdfjs/${f} (npm run setup)`);
   }
+  for (const f of ['tesseract.min.js', 'worker.min.js', 'tesseract-core-simd-lstm.wasm.js', 'lang/eng.traineddata.gz', 'lang/ita.traineddata.gz', 'lang/rus.traineddata.gz']) {
+    if (!existsSync(path.join(root, 'vendor/tesseract', f))) problems.push(`нет vendor/tesseract/${f} (npm run setup)`);
+  }
   return problems;
 }
 const IGNORED = new Set(['.DS_Store']);

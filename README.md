@@ -52,7 +52,10 @@ case endings.
 **Files:** text files are cleaned in place. Word, Excel and PowerPoint are read locally in full,
 including metadata, comments and their authors, tracked changes, fields, links, charts and embedded
 workbooks, and go out as the same document with labels instead of the data. PDF goes out as a clean
-text copy. Files Velami cannot read, such as scans and images, are held back until you decide.
+text copy, scanned pages included. On images (PNG, JPEG, WebP, GIF, BMP), and on images inside Office
+documents, Velami reads the text on the device (Tesseract, Italian, English, Russian), covers the
+data with labels and removes location and camera data. Files Velami cannot read are held back until
+you decide.
 
 ## You can check it yourself
 
@@ -148,10 +151,11 @@ All tests use made-up data only. The interface is in English, Italian and Russia
 
 ## Limitations
 
-From PDF and Office files only the text is read, without layout or pictures. Images and scans are
-not read. Old `.doc` and `.xls` are not parsed. The model misses some names and addresses and
+PDF goes out as a text copy, without layout. Text on images is recognized automatically and can be
+misread, faces, signatures and handwriting are not recognized. HEIC, TIFF, SVG and AVIF images and
+old `.doc` and `.xls` are not parsed. The model misses some names and addresses and
 sometimes flags too much. While loaded it uses about 250 MB of memory, and the package is about
-186 MB. Interception follows each site's current API and will break if a site changes it, the
+198 MB. Interception follows each site's current API and will break if a site changes it, the
 coverage check will tell you.
 
 ## Security

@@ -251,6 +251,7 @@
     pptx: /^ppt\/(slides\/slide|notesSlides\/notesSlide)\d+\.xml$/,
   };
   const MAX_DEPTH = 3;
+  const MAX_OCR_IMAGES = 30;
 
   const attrXml = (s) => toXml(s).replace(/"/g, '&quot;');
 
@@ -384,7 +385,7 @@
         files.push({ name, xml, ...scanXml(name, xml, { removed, readable: depth === 0 && READABLE[kind].test(name) }) });
         continue;
       }
-      if (IMAGE_PART.test(name)) info.images++;
+      if (IMAGE_PART.test(name)) { info.images++; files.push({ name, image: true }); continue; }
       if (/(^|\/)embeddings\//i.test(name)) {
         const sub = kindOf(name);
         if (sub && depth < MAX_DEPTH) {
@@ -402,6 +403,15 @@
       files.push({ name });
     }
     return { zip, files, info };
+  }
+
+  /* Картинки пакета вместе с вложенными документами. key: путь, для вложенных через «!». */
+  function imagesOf(p, prefix = '', out = []) {
+    for (const f of p.files) {
+      if (f.image) out.push({ key: prefix + f.name, zip: p.zip, name: f.name });
+      if (f.nested) imagesOf(f.nested, prefix + f.name + '!', out);
+    }
+    return out;
   }
 
   function unitsOf(p, out = []) {
@@ -547,12 +557,16 @@
     return out;
   }
 
-  async function emit(p, locate, values, tokenOf, stats) {
+  async function emit(p, locate, values, tokenOf, stats, redact, prefix = '') {
     const items = [];
     for (const f of p.files) {
       if (f.removed) { stats.removed++; continue; }
       const meta = p.zip.raw(f.name);
-      if (f.nested) { items.push({ name: f.name, bytes: await emit(f.nested, locate, values, tokenOf, stats), time: meta.time, date: meta.date }); continue; }
+      if (f.nested) { items.push({ name: f.name, bytes: await emit(f.nested, locate, values, tokenOf, stats, redact, prefix + f.name + '!'), time: meta.time, date: meta.date }); continue; }
+      if (f.image && redact) {
+        const bytes = await redact(prefix + f.name, () => p.zip.readBytes(f.name));
+        if (bytes) { stats.images++; items.push({ name: f.name, bytes, time: meta.time, date: meta.date }); continue; }
+      }
       if (f.empty) { stats.emptied++; items.push({ name: f.name, bytes: new Uint8Array(0), time: meta.time, date: meta.date }); continue; }
       if (f.units) {
         const repls = [...f.repls];
@@ -568,24 +582,35 @@
 
   /* Текст документа: сначала то, что видно при чтении, потом всё остальное, что есть в пакете.
      Бросает ошибку, если файл не zip или распакованное слишком велико. */
-  async function extract(bytes, name) {
+  async function extract(bytes, name, { ocr } = {}) {
     const kind = kindOf(name);
     if (!kind) throw new Error('unsupported');
     const text = await KINDS[kind](opener(bytes));
     const p = await plan(bytes, kind);
     const hidden = [...new Set(unitsOf(p).filter((u) => !u.covered).map((u) => u.text.trim()).filter((t) => t.length > 1))];
-    return { kind, text: hidden.length ? text + '\n\n' + hidden.join('\n') : text, ...p.info };
+    const info = { ...p.info, imagesRead: 0 };
+    if (ocr) {
+      for (const img of imagesOf(p).slice(0, MAX_OCR_IMAGES)) {
+        const t = await ocr(img.key, await img.zip.readBytes(img.name));
+        if (t === null) continue;
+        info.imagesRead++;
+        if (t.trim()) hidden.push(t.trim());
+      }
+    }
+    return { kind, text: hidden.length ? text + '\n\n' + hidden.join('\n') : text, ...info };
   }
 
   /* Очищенная копия в том же формате. values: найденные значения с метками ({id, type, value, token}),
      locate: поиск этих значений в тексте (PG.locate). Макросы, подписи и миниатюра удаляются,
      внедрённые объекты, которые нельзя разобрать, обнуляются. */
-  async function clean(bytes, name, values, locate) {
+  async function clean(bytes, name, values, locate, { redact } = {}) {
     const kind = kindOf(name);
     if (!kind) throw new Error('unsupported');
     const tokenOf = new Map(values.map((v) => [v.id, v.token]));
-    const stats = { replaced: 0, removed: 0, emptied: 0 };
-    const out = await emit(await plan(bytes, kind), locate, values, tokenOf, stats);
+    const stats = { replaced: 0, removed: 0, emptied: 0, images: 0 };
+    let budget = MAX_OCR_IMAGES;
+    const limited = redact && ((key, read) => (budget-- > 0 ? redact(key, read) : null));
+    const out = await emit(await plan(bytes, kind), locate, values, tokenOf, stats, limited);
     return { bytes: out, name: outName(name), ...stats };
   }
 

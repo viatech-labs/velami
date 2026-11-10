@@ -57,7 +57,7 @@ on and granted the permission (chrome.scripting.registerContentScripts). No code
 outside the package.
 
 **offscreen.** Runs the bundled name and address recognition model (onnxruntime-web, WebAssembly)
-and reads the text of attached PDF and Office files (bundled pdf.js) in an offscreen document, because a service worker cannot run WebAssembly threads. The document is
+reads the text of attached PDF and Office files (bundled pdf.js) and the text on attached images (bundled Tesseract) in an offscreen document, because a service worker cannot run WebAssembly threads. The document is
 created on the first check, answers only the extension's own background process, has no network
 access beyond the extension's files (CSP), and closes itself after 5 minutes without work.
 
@@ -71,13 +71,13 @@ no data: it sends the request text to the isolated content script for masking an
 the label vault.
 
 **Remote code.** No. All code is in the package. The extension's own code is not minified. The
-bundled onnxruntime-web 1.31.1 (MIT) and pdf.js 6.5.438 (Apache-2.0) are the unmodified upstream builds, and the model files are data
+bundled onnxruntime-web 1.31.1 (MIT), pdf.js 6.5.438 (Apache-2.0) and Tesseract.js 7.0.0 with its core (Apache-2.0) are the unmodified upstream builds, and the model files and Tesseract language data (tessdata_best, Apache-2.0) are data
 with SHA-256 recorded in `tools/model/model.lock.json`. The extension pages CSP is
 `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly from the package only) and
 `connect-src 'self' https://httpbin.org`.
 
-**Package size.** About 186 MB, of which 166 MB is the recognition model, 15 MB the WebAssembly
-runtime and 3 MB pdf.js with its character maps. See `docs/MODEL.md`.
+**Package size.** About 198 MB, of which 166 MB is the recognition model, 15 MB the WebAssembly
+runtime, 12 MB Tesseract with Italian, English and Russian language data and 3 MB pdf.js with its character maps. See `docs/MODEL.md`.
 
 ## Data usage (Privacy practices)
 
@@ -111,7 +111,7 @@ Write to ChatGPT, Claude, Gemini and Perplexity as usual. Copilot, DeepSeek, Mis
 and Grok can be turned on in the settings. Before a message leaves your computer, Velami finds
 card numbers, IBANs, tax codes, ID documents, dates of birth, licence plates, phone numbers, e-mails and API keys, recognises names and addresses
 with a model that runs on your computer, and replaces them with labels like [[EMAIL_1]]. The model answers with labels, you see the answer with
-the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, PDF as a text copy with labels, and the Copy button gives you the
+the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, PDF as a text copy with labels, images as the same image with the data covered, and the Copy button gives you the
 real values.
 
 You do not have to trust us. A panel next to the chat shows the exact text the model will get. The
@@ -133,7 +133,7 @@ Scrivi a ChatGPT, Claude, Gemini e Perplexity come sempre. Copilot, DeepSeek, Mi
 e Grok si attivano nelle impostazioni. Prima che un messaggio lasci il tuo computer, Velami
 trova numeri di carta, IBAN, codici fiscali, documenti, date di nascita, targhe, telefoni, e-mail e chiavi API, riconosce nomi e
 indirizzi con un modello che gira sul tuo computer, e li sostituisce con etichette come [[EMAIL_1]]. Il modello risponde con le etichette, tu vedi la
-risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, i PDF come copia di testo, e il pulsante Copia
+risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, i PDF come copia di testo, le immagini come la stessa immagine con i dati coperti, e il pulsante Copia
 ti dà i valori reali.
 
 Non devi fidarti di noi. Un pannello accanto alla chat mostra il testo esatto che riceverà il
@@ -155,7 +155,7 @@ Description:
 и Grok включаются в настройках. До того как сообщение покинет компьютер, Velami
 находит номера карт, IBAN, налоговые коды, документы, даты рождения, госномера, телефоны, e-mail и API-ключи, распознаёт имена и адреса
 моделью, которая работает на вашем компьютере, и заменяет их метками вроде [[EMAIL_1]]. Модель отвечает с метками, а вы видите ответ с настоящими
-значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, PDF текстовой копией, а кнопка «Копировать» отдаёт настоящие
+значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, PDF текстовой копией, картинки той же картинкой с закрытыми данными, а кнопка «Копировать» отдаёт настоящие
 значения.
 
 Верить нам на слово не нужно. Панель рядом с чатом показывает точный текст, который получит модель.

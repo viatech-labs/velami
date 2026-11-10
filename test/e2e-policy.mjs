@@ -175,34 +175,36 @@ try {
   });
 
   await pick('scansione.pdf');
-  const scanAsk = await waitDialog();
+  const scanAsk = await waitDialog(400);
   const scanButtons = buttons(scanAsk);
-  const scanText = textOf(scanAsk);
-  await page.screenshot({ path: path.join(out, 'scan-blocked.png') });
-  await press('OK');
-  await sleep(500);
-  check('скан: отправить нельзя, только «OK», в окне контакт поддержки, файл не ушёл', () => {
-    assert.deepEqual(scanButtons, ['OK']);
-    assert.match(scanText, /non permette di inviare file/);
-    assert.match(scanText, /it@studio-bianchi\.example/);
+  await press('Invia copia pulita');
+  const scanCopy = await waitUpload('scansione.pdf.txt');
+  check('скан: текст прочитан OCR, оригинал запрещён, уходит только копия с метками', () => {
+    assert.deepEqual(scanButtons, ['Annulla', 'Invia copia pulita']);
+    assert.ok(scanCopy && scanCopy.includes('[[EMAIL_') && !scanCopy.includes('mario.rossi@example.com'));
     assert.equal(uploads['scansione.pdf'], undefined);
   });
 
+  /* Картинка в формате, который Velami не читает: отправить нельзя, только «OK». */
   const png = readFileSync(path.join(root, 'icons', '128.png')).toString('base64');
   await page.evaluate((b64) => {
     const dt = new DataTransfer();
-    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'foto.png', { type: 'image/png' }));
+    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'foto.heic', { type: 'image/heic' }));
     document.getElementById('drop').dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
   }, png);
   const imgAsk = await waitDialog();
   const imgButtons = buttons(imgAsk);
+  const imgText = textOf(imgAsk);
   const imgOption = find(imgAsk, (n) => cls(n, 'ask-opt'));
+  await page.screenshot({ path: path.join(out, 'image-blocked.png') });
   await press('OK');
   await sleep(500);
-  check('картинка тоже не уходит, галочки «не спрашивать» нет', () => {
+  check('картинка, которую нельзя проверить: только «OK», контакт поддержки, галочки нет, не ушла', () => {
     assert.deepEqual(imgButtons, ['OK']);
+    assert.match(imgText, /non permette di inviare file/);
+    assert.match(imgText, /it@studio-bianchi\.example/);
     assert.ok(attr(imgOption, 'hidden') !== null);
-    assert.equal(uploads['foto.png'], undefined);
+    assert.equal(uploads['foto.heic'], undefined);
   });
 
   await page.click('#prompt-textarea');

@@ -27,7 +27,7 @@
       "type": "boolean"
     },
     "askImages": {
-      "title": "Ask before sending images",
+      "title": "Ask before sending images Velami cannot read (HEIC, TIFF, SVG, AVIF)",
       "description": "Not set: the user decides.",
       "type": "boolean"
     },
@@ -61,7 +61,7 @@
     },
     "allowUncheckedFiles": {
       "title": "Allow sending files that cannot be checked",
-      "description": "false: scans, images, password protected and unknown files are not sent.",
+      "description": "false: files Velami cannot check (images in unsupported formats, password protected and unknown files) are not sent.",
       "type": "boolean"
     }
   }

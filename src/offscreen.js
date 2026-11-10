@@ -80,6 +80,23 @@ const MAX_PAGES = 500;
 const EMPTY_PAGE = 20;
 let pdfjs = null;
 
+/* Страница без текстового слоя (скан, фото): рисуется примерно в 200 dpi и читается OCR. */
+async function pageOcr(page) {
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min(200 / 72, 4000 / Math.max(base.width, base.height));
+  const viewport = page.getViewport({ scale });
+  const canvas = new OffscreenCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  /* intent print: обычная отрисовка ждёт requestAnimationFrame, а в скрытом offscreen-документе он не наступает. */
+  const task = page.render({ canvasContext: ctx, viewport, intent: 'print' });
+  let timer;
+  await Promise.race([task.promise, new Promise((_, no) => { timer = setTimeout(() => { task.cancel(); no(new Error('render timeout')); }, PAGE_RENDER_MS); })])
+    .finally(() => clearTimeout(timer));
+  return (await ocrCanvas(canvas)).text;
+}
+
 async function pdfText(bytes) {
   if (!pdfjs) {
     pdfjs = await import('../vendor/pdfjs/pdf.min.mjs');
@@ -98,18 +115,184 @@ async function pdfText(bytes) {
     const pages = Math.min(doc.numPages, MAX_PAGES);
     const texts = [];
     let empty = 0;
+    let ocrPages = 0;
     for (let i = 1; i <= pages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-      const text = content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim();
-      if (text.replace(/\s/g, '').length < EMPTY_PAGE) empty++;
+      let text = content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim();
+      if (text.replace(/\s/g, '').length < EMPTY_PAGE) {
+        const seen = ocrPages < OCR_PAGES ? await pageOcr(page).catch(() => null) : null;
+        if (seen === null) empty++;
+        else { ocrPages++; text = (text + '\n' + seen).trim(); }
+      }
       texts.push(text);
       page.cleanup();
     }
-    return { text: texts.join('\n\n'), pages: doc.numPages, emptyPages: empty, truncated: doc.numPages > pages };
+    return { text: texts.join('\n\n'), pages: doc.numPages, emptyPages: empty, ocrPages, truncated: doc.numPages > pages };
   } finally {
     task.destroy();
   }
+}
+
+/* ---------- картинки: распознавание текста и закрытие найденных мест ---------- */
+
+const TESS = BASE + 'vendor/tesseract/';
+const OCR_LANGS = ['ita', 'eng', 'rus'];
+const OCR_MAX_PIXELS = 40e6;
+const OCR_SMALL_SIDE = 1000;
+const OCR_CACHE = 40;
+const OCR_CACHE_PIXELS = 60e6;
+const OCR_PAGES = 30;
+const PAGE_RENDER_MS = 20000;
+let ocrWorker = null;
+const ocrCache = new Map();
+
+function ocrReady() {
+  if (!ocrWorker) {
+    ocrWorker = Tesseract.createWorker(OCR_LANGS, 1, {
+      workerPath: TESS + 'worker.min.js',
+      corePath: TESS + 'tesseract-core-simd-lstm.wasm.js',
+      langPath: TESS + 'lang',
+      workerBlobURL: false,
+      cacheMethod: 'none',
+      gzip: true,
+    });
+    ocrWorker.catch(() => { ocrWorker = null; });
+  }
+  return ocrWorker;
+}
+
+async function digest(bytes) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(h, (x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+/* Мелкий текст на скриншотах Tesseract читает плохо: маленькие картинки увеличиваются вдвое,
+   координаты возвращаются в пикселях исходного размера. */
+async function ocrCanvas(canvas) {
+  const scale = Math.max(canvas.width, canvas.height) < OCR_SMALL_SIDE ? 2 : 1;
+  let src = canvas;
+  if (scale !== 1) {
+    src = new OffscreenCanvas(canvas.width * scale, canvas.height * scale);
+    const ctx = src.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, src.width, src.height);
+  }
+  const worker = await ocrReady();
+  const { data } = await worker.recognize(await src.convertToBlob({ type: 'image/png' }), {}, { text: false, blocks: true });
+  const out = __PGImage.layout(data.blocks);
+  if (scale !== 1) out.boxes = out.boxes.map((b) => b && { x0: b.x0 / scale, y0: b.y0 / scale, x1: b.x1 / scale, y1: b.y1 / scale, line: b.line });
+  return out;
+}
+
+async function decode(bytes) {
+  const format = __PGImage.formatOf(bytes);
+  if (!format) return null;
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: __PGImage.MIME[format] }));
+  if (bitmap.width * bitmap.height > OCR_MAX_PIXELS) { bitmap.close(); return { format, big: true }; }
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return { format, canvas };
+}
+
+/* Распознанный текст картинки по её байтам. null: формат не читается (EMF, TIFF, SVG...) или слишком большая. */
+async function ocrBytes(bytes) {
+  const key = await digest(bytes);
+  if (ocrCache.has(key)) {
+    const hit = ocrCache.get(key);
+    ocrCache.delete(key);
+    ocrCache.set(key, hit);
+    return hit;
+  }
+  const img = await decode(bytes);
+  if (!img || img.big) return null;
+  const r = { ...(await ocrCanvas(img.canvas)), format: img.format, canvas: img.canvas };
+  ocrCache.set(key, r);
+  let pixels = 0;
+  for (const v of ocrCache.values()) pixels += v.canvas.width * v.canvas.height;
+  while (ocrCache.size > 1 && (ocrCache.size > OCR_CACHE || pixels > OCR_CACHE_PIXELS)) {
+    const [k, v] = ocrCache.entries().next().value;
+    pixels -= v.canvas.width * v.canvas.height;
+    ocrCache.delete(k);
+  }
+  return r;
+}
+
+const LABEL_FONT = 'bold {px}px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+/* Найденные места заливаются серым, в первом прямоугольнике каждого значения тёмным пишется
+   метка размером с окружающий текст: так её надёжнее читают и люди, и модели. Метка, которая
+   не помещается, расширяет заливку вправо. */
+function paint(canvas, rects) {
+  const ctx = canvas.getContext('2d');
+  for (const r of rects) {
+    const h = Math.max(8, r.y1 - r.y0);
+    let w = Math.max(4, r.x1 - r.x0);
+    let label = r.token;
+    const px = Math.max(10, Math.round(h * 0.8));
+    if (label) {
+      ctx.font = LABEL_FONT.replace('{px}', px);
+      const bare = label.replace(/^\[\[|\]\]$/g, '');
+      if (ctx.measureText(label).width + 8 > w && ctx.measureText(bare).width + 8 <= w) label = bare;
+      w = Math.max(w, ctx.measureText(label).width + 8);
+    }
+    w = Math.min(w, canvas.width - r.x0);
+    ctx.fillStyle = '#dfe2e7';
+    ctx.fillRect(r.x0, r.y0, w, h);
+    if (label) {
+      ctx.fillStyle = '#16181d';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, r.x0 + 4, r.y0 + h / 2 + 0.5, w - 6);
+    }
+  }
+}
+
+async function encode(canvas, format) {
+  const type = format === 'jpeg' || format === 'webp' ? __PGImage.MIME[format] : 'image/png';
+  return new Uint8Array(await (await canvas.convertToBlob({ type, quality: 0.92 })).arrayBuffer());
+}
+
+/* Копия картинки, где закрыты все места найденных значений. null: на картинке их нет. */
+async function redactBytes(bytes, list) {
+  const o = await ocrBytes(bytes);
+  if (!o) return null;
+  const byId = new Map(list.map((v) => [v.id, v.token]));
+  const spans = PG.locate(o.text, list).map((f) => ({ ...f, token: byId.get(f.id) }));
+  if (!spans.length) return null;
+  const { rects, lost } = __PGImage.rectsFor(o.boxes, spans);
+  if (lost.length) throw new Error('value without position on image');
+  const canvas = new OffscreenCanvas(o.canvas.width, o.canvas.height);
+  canvas.getContext('2d').drawImage(o.canvas, 0, 0);
+  paint(canvas, rects);
+  return { bytes: await encode(canvas, o.format), format: o.format, replaced: spans.length, canvas };
+}
+
+async function extractImage(bytes) {
+  const meta = __PGImage.stripMeta(bytes);
+  const o = await ocrBytes(bytes);
+  if (!o) return { reason: __PGImage.formatOf(bytes) ? 'big' : 'unsupported' };
+  const r = { kind: 'image', text: o.text, format: o.format, width: o.canvas.width, height: o.canvas.height, meta: meta.removed, gps: meta.gps };
+  /* Без найденных данных уходит тот же файл без метаданных. Повёрнутый EXIF-ом снимок перерисовывается,
+     иначе без EXIF он лёг бы набок. */
+  if (meta.removed.length) r.stripped = toBase64(meta.orientation === 1 ? meta.bytes : await encode(o.canvas, o.format));
+  return r;
+}
+
+async function cleanImage(name, bytes, list) {
+  const r = await redactBytes(bytes, list);
+  if (!r) return { error: 'nothing to clean' };
+  const again = await ocrCanvas(r.canvas);
+  const left = PG.locate(again.text, list).length;
+  if (left) return { error: 'values left after cleaning', left };
+  const out = __PGImage.output(name, r.format);
+  return { name: out.name, type: out.type, data: toBase64(r.bytes), replaced: r.replaced };
+}
+
+/* Картинки внутри документов Office: текст для поиска и замена на закрытую копию. */
+async function officeOcr(key, bytes) {
+  const o = await ocrBytes(bytes).catch(() => null);
+  return o ? o.text : null;
 }
 
 const fromBase64 = (data) => Uint8Array.from(atob(String(data || '')), (c) => c.charCodeAt(0));
@@ -124,7 +307,8 @@ async function extract({ name, data }) {
   if (/\.pdf$/i.test(name) || (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
     return { kind: 'pdf', ...(await pdfText(bytes)) };
   }
-  if (__PGOffice.kindOf(name)) return __PGOffice.extract(bytes, name);
+  if (__PGOffice.kindOf(name)) return __PGOffice.extract(bytes, name, { ocr: officeOcr });
+  if (__PGImage.formatOf(bytes)) return extractImage(bytes);
   return { reason: 'unsupported' };
 }
 
@@ -135,11 +319,18 @@ async function cleanDoc({ name, data, values }) {
     .filter((v) => v && typeof v.id === 'string' && typeof v.value === 'string' && typeof v.token === 'string' && PG.typeOfToken(v.token))
     .map(({ id, type, value, token }) => ({ id, type: String(type), value, token }));
   if (!list.length) return { error: 'nothing to clean' };
-  const r = await __PGOffice.clean(fromBase64(data), String(name || ''), list, PG.locate);
-  const check = await __PGOffice.extract(r.bytes, r.name);
+  const bytes = fromBase64(data);
+  name = String(name || '');
+  if (!__PGOffice.kindOf(name) && __PGImage.formatOf(bytes)) return cleanImage(name, bytes, list);
+  const redact = async (key, read) => {
+    const r = await redactBytes(await read(), list);
+    return r && r.bytes;
+  };
+  const r = await __PGOffice.clean(bytes, name, list, PG.locate, { redact });
+  const check = await __PGOffice.extract(r.bytes, r.name, { ocr: officeOcr });
   const left = PG.locate(check.text, list).length;
   if (left) return { error: 'values left after cleaning', left };
-  return { name: r.name, data: toBase64(r.bytes), replaced: r.replaced, removed: r.removed, emptied: r.emptied };
+  return { name: r.name, data: toBase64(r.bytes), replaced: r.replaced, removed: r.removed, emptied: r.emptied, images: r.images };
 }
 
 function touch() {

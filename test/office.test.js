@@ -163,3 +163,19 @@ test('zip-бомба: распаковка останавливается на �
   const zip = Buffer.concat([local, name, big, central, name, end]);
   await assert.rejects(O.extract(new Uint8Array(zip), 'bomba.docx'), /too large/);
 });
+
+test('картинки внутри документа: текст с них идёт в поиск, закрытая копия заменяет картинку', async () => {
+  const bytes = new Uint8Array(fs.readFileSync(path.join(dir, 'ricevuta.docx')));
+  const seen = [];
+  const r = await O.extract(bytes, 'ricevuta.docx', { ocr: async (key, img) => { seen.push([key, img.length]); return 'IBAN IT60 X054 2811 1010 0000 0123 456'; } });
+  assert.strictEqual(r.images, 1);
+  assert.strictEqual(r.imagesRead, 1);
+  assert.match(seen[0][0], /^word\/media\/image1\.png$/);
+  assert.ok(seen[0][1] > 1000);
+  assert.match(r.text, /IT60 X054/);
+  const values = [{ id: 'i1', type: 'IBAN', value: 'IT60 X054 2811 1010 0000 0123 456', token: '[[IBAN_1]]' }];
+  const out = await O.clean(bytes, 'ricevuta.docx', values, PG.locate, { redact: async (key, readBytes) => ((await readBytes()).length ? new Uint8Array([7, 7, 7]) : null) });
+  assert.strictEqual(out.images, 1);
+  const parts = unzipAll(Buffer.from(out.bytes));
+  assert.deepStrictEqual([...parts['word/media/image1.png']], [7, 7, 7]);
+});

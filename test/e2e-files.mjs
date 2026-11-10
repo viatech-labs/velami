@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { inflateRawSync } from 'node:zlib';
+import { crc32, inflateRawSync } from 'node:zlib';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,7 +21,25 @@ const OFFICE = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
-const Office = createRequire(import.meta.url)(path.join(root, 'src', 'office.js'));
+const require = createRequire(import.meta.url);
+const Office = require(path.join(root, 'src', 'office.js'));
+const Tesseract = require('tesseract.js');
+let ocrWorker = null;
+/* Что увидит модель на картинке: тот же OCR, что в расширении, но в Node. */
+async function ocrText(bytes) {
+  ocrWorker ||= await Tesseract.createWorker(['ita', 'eng', 'rus'], 1, { langPath: path.join(root, 'vendor', 'tesseract', 'lang'), cacheMethod: 'none', gzip: true });
+  return (await ocrWorker.recognize(Buffer.from(bytes))).data.text;
+}
+/* PNG с текстовым блоком метаданных (автор), чтобы проверить, что он не уходит. */
+function withPngText(png, key, value) {
+  const data = Buffer.concat([Buffer.from(key, 'latin1'), Buffer.from([0]), Buffer.from(value, 'latin1')]);
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write('tEXt', 4, 'latin1');
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, 8 + data.length)) >>> 0, 8 + data.length);
+  return Buffer.concat([png.subarray(0, 33), chunk, png.subarray(33)]);
+}
 
 function unzipAll(buf, prefix = '') {
   const out = {};
@@ -45,7 +63,7 @@ function unzipAll(buf, prefix = '') {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (name, fn) => { fn(); results.push(name); console.log('  ✓ ' + name); };
-setTimeout(() => { console.error('Тест не уложился в 3 минуты'); process.exit(2); }, 180000).unref();
+setTimeout(() => { console.error('Тест не уложился в 5 минут'); process.exit(2); }, 300000).unref();
 
 const PAGE = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>ChatGPT (doppione)</title></head><body style="font:15px system-ui;margin:40px">
 <div id="prompt-textarea" contenteditable="true" style="border:1px solid #ccc;min-height:40px"></div>
@@ -241,15 +259,65 @@ try {
     assert.equal(uploads['macro.docm'], undefined);
   });
 
-  /* Скан без текста: только «как есть» или отмена. */
+  /* Скан: страница-картинка читается OCR, уходит текстовая копия с метками. */
   await pick('scansione.pdf');
-  const scanText = textOf(await waitDialog());
+  const scanText = textOf(await waitDialog(400));
   await page.screenshot({ path: path.join(out, 'scan-ask.png') });
-  await press('Annulla');
-  check('PDF-скан: Velami честно говорит, что не может проверить, и по отмене файл не уходит', () => {
-    assert.match(scanText, /non può controllare «scansione\.pdf»/);
-    assert.match(scanText, /scansione/);
+  await press('Invia copia pulita');
+  const scanCopy = await waitUpload('scansione.pdf.txt');
+  check('PDF-скан: текст страницы-картинки прочитан OCR, ушла копия с метками', () => {
+    assert.match(scanText, /Dati personali in «scansione\.pdf»/);
+    assert.ok(scanCopy && scanCopy.includes('[[EMAIL_1]]'), 'нет метки в копии: ' + scanCopy);
+    assert.ok(!LEFT.test(scanCopy), 'утекло: ' + scanCopy);
     assert.equal(uploads['scansione.pdf'], undefined);
+  });
+
+  /* Картинка с данными: та же картинка, места закрыты метками. */
+  await pick('bonifico.png');
+  const shotAsk = textOf(await waitDialog(400));
+  await press('Invia copia pulita');
+  const shot = await sent('bonifico.png');
+  const shotSeen = await ocrText(shot.bytes);
+  writeFileSync(path.join(out, 'bonifico-sent.png'), shot.bytes);
+  check('картинка: окно с найденным, уходит та же PNG, на ней метки вместо данных', () => {
+    assert.match(shotAsk, /ha letto il testo dell’immagine/);
+    assert.equal(shot.type, 'image/png');
+    assert.equal(Buffer.from(shot.bytes.subarray(1, 4)).toString(), 'PNG');
+    assert.ok(!LEFT.test(shotSeen), 'на картинке осталось: ' + shotSeen);
+    assert.match(shotSeen, /IBAN_1/);
+    assert.match(shotSeen, /Importo 1\.250,50 EUR/);
+  });
+
+  /* Фото по-русски с GPS: после очистки ни EXIF, ни данных. */
+  await pick('chat-ru.jpg');
+  await press('Invia copia pulita');
+  const photo = await sent('chat-ru.jpg');
+  const photoSeen = await ocrText(photo.bytes);
+  check('JPEG: уходит JPEG без EXIF и GPS, почта и телефон закрыты', () => {
+    assert.equal(photo.type, 'image/jpeg');
+    const raw = Buffer.from(photo.bytes).toString('latin1');
+    assert.ok(!raw.includes('Exif') && !raw.includes('Maria Petrova'), 'метаданные остались');
+    assert.ok(!/maria\.petrova|916 ?123/i.test(photoSeen), 'на картинке осталось: ' + photoSeen);
+    assert.match(photoSeen, /Встреча в четверг/);
+  });
+
+  /* Картинка без текста, но с автором в метаданных: уходит без окна и без метаданных. */
+  await dropFile('sfondo.png', 'image/png', withPngText(readFileSync(path.join(files, 'paesaggio.png')), 'Author', 'Mario Rossi'));
+  const plain = await sent('sfondo.png');
+  check('картинка без текста: без окна, метаданные удалены, остальное как было', () => {
+    assert.ok(plain, 'картинка не ушла');
+    const raw = Buffer.from(plain.bytes).toString('latin1');
+    assert.ok(!raw.includes('tEXt') && !raw.includes('Rossi'), 'метаданные остались');
+    assert.equal(plain.bytes.length, readFileSync(path.join(files, 'paesaggio.png')).length);
+  });
+
+  /* Word, где данные только на вставленной картинке. */
+  const receipt = await sameFormat('ricevuta.docx', 'ricevuta.docx', OFFICE.docx, []);
+  const media = Object.entries(receipt.parts).find(([n]) => /^word\/media\/.+\.png$/.test(n));
+  const mediaSeen = await ocrText(media[1]);
+  check('Word с картинкой: картинка внутри документа закрыта метками', () => {
+    assert.ok(!LEFT.test(mediaSeen), 'на картинке осталось: ' + mediaSeen);
+    assert.match(mediaSeen, /IBAN_1/);
   });
 
   /* PDF с паролем: прочитать нельзя, спрашиваем. */
@@ -261,18 +329,18 @@ try {
     assert.equal(uploads['protetto.pdf'], undefined);
   });
 
-  /* Картинка перетаскиванием: спрашивает один раз, потом по галочке не спрашивает. */
+  /* Картинка в формате, который Velami не читает: спрашивает один раз, потом по галочке не спрашивает. */
   const png = readFileSync(path.join(root, 'icons', '128.png'));
-  await dropFile('screenshot.png', 'image/png', png);
+  await dropFile('scheda.tiff', 'image/tiff', png);
   const imgText = textOf(await waitDialog());
   await tick();
   await press('Invia così com’è');
-  await waitUpload('screenshot.png');
+  await waitUpload('scheda.tiff');
   await sleep(600);
-  await dropFile('foto.png', 'image/png', png);
-  const second = await waitUpload('foto.png');
-  check('картинка: спросили один раз, после «Non chiedere più» уходит без окна', () => {
-    assert.match(imgText, /immagine/);
+  await dropFile('scheda2.tiff', 'image/tiff', png);
+  const second = await waitUpload('scheda2.tiff');
+  check('картинка, которую Velami не читает: спросили один раз, после «Non chiedere più» уходит без окна', () => {
+    assert.match(imgText, /Questo formato non lo apre/);
     assert.ok(second !== undefined, 'вторая картинка не ушла');
   });
 
@@ -291,7 +359,8 @@ try {
   check('журнал: копии записаны как проверенные, оригиналы по выбору с причиной, тревоги нет', () => {
     assert.ok(log.some((e) => e.kind === 'file' && e.file === 'estratto.pdf' && /estratto\.pdf\.txt/.test(e.note || '')));
     assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'richiesta.docx' && /su tua scelta/.test(e.note)));
-    assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'screenshot.png'));
+    assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'scheda.tiff'));
+    assert.ok(log.some((e) => e.kind === 'file' && e.file === 'bonifico.png' && /stessa immagine/.test(e.note || '')));
     assert.ok(!/non controllato/i.test(pillText), 'кнопка показывает тревогу: ' + pillText);
   });
   const state = await ext({ type: 'state' });
@@ -303,4 +372,5 @@ try {
   process.exitCode = 1;
 } finally {
   await browser.close();
+  if (ocrWorker) await ocrWorker.terminate();
 }
