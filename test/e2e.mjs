@@ -422,7 +422,7 @@ try {
   await sleep(350);
   const popupText = await popup.evaluate(() => document.body.innerText);
   check('всплывающее окно: статус защиты, версия и счётчики', () => {
-    for (const s of ['Protected', 'version 0.1.0', 'hidden today']) assert.ok(popupText.includes(s), 'нет «' + s + '» в ' + popupText);
+    for (const s of ['Protected', 'version ' + JSON.parse(readFileSync(path.join(extDir, 'manifest.json'), 'utf8')).version, 'hidden today']) assert.ok(popupText.includes(s), 'нет «' + s + '» в ' + popupText);
   });
   await popup.screenshot({ path: path.join(out, '6-popup.png'), fullPage: true });
   await scheme(popup, 'dark');
