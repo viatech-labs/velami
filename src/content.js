@@ -786,7 +786,7 @@
      (больше PDF_COPY_PAGES страниц) и документ, который не удалось собрать, уходят текстом. */
   async function cleanDoc(f) {
     if (f.size > MAX_DOC_FILE) return askUnchecked(f, 'big', { mb: 30 });
-    toast('ok', tr('file.reading', { name: f.name }), 20000);
+    toast('ok', tr('file.reading', { name: f.name }), 600000);
     const r = await send({ type: 'extractFile', name: f.name, data: toBase64(await f.arrayBuffer()) });
     toastEl.hidden = true;
     if (!r || r.error) throw new Error((r && r.error) || tr('err.noReply'));
@@ -801,6 +801,7 @@
     if (!m.summary.count) {
       if (unnamed) return askUnchecked(f, 'names');
       if (images) return askUnchecked(f, 'partial', { n: images });
+      if (r.attachments) return askUnchecked(f, 'attachments', { n: r.attachments });
       checkedFiles.add(sigOf(f));
       send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: r.text } }).catch(() => {});
       toast('ok', tr('file.clean', { name: f.name }), 6000);
@@ -829,7 +830,7 @@
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
     if (same) {
-      if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 180000);
+      if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 600000);
       const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
       if (pdfSame) toastEl.hidden = true;
       if (c && !c.error && c.data) {

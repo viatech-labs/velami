@@ -88,3 +88,37 @@ test('собранный PDF: страницы картинками, текст 
   assert.equal(meta.metadata, null);
   await doc.cleanup();
 });
+
+test('картинки на странице: место по матрицам, полосы скана склеиваются, мелочь отбрасывается', async () => {
+  const doc = await open(readFileSync(path.join(files, 'modulo.pdf')));
+  const page = await doc.getPage(1);
+  const vp = page.getViewport({ scale: 2 });
+  const ops = await page.getOperatorList({ intent: 'print' });
+  const regions = Pdf.imageRegions(ops.fnArray, ops.argsArray, pdfjs.OPS, vp.transform, Math.ceil(vp.width), Math.ceil(vp.height));
+  assert.equal(regions.length, 1);
+  const [r] = regions;
+  assert.ok(Math.abs(r.x0 - 144) < 2 && Math.abs(r.y0 - 320) < 2 && Math.abs(r.x1 - 944) < 2 && Math.abs(r.y1 - 620) < 2, JSON.stringify(r));
+  await doc.cleanup();
+
+  const OPS = { save: 1, restore: 2, transform: 3, paintImageXObject: 4, paintFormXObjectBegin: 5, paintFormXObjectEnd: 6, paintImageXObjectRepeat: 7 };
+  const strip = (y) => [[OPS.save, null], [OPS.transform, [400, 0, 0, 50, 100, y]], [OPS.paintImageXObject, ['img', 1, 1]], [OPS.restore, null]];
+  const icon = [[OPS.save, null], [OPS.transform, [10, 0, 0, 10, 700, 700]], [OPS.paintImageXObject, ['i', 1, 1]], [OPS.restore, null]];
+  const run = (list) => Pdf.imageRegions(list.map((x) => x[0]), list.map((x) => x[1]), OPS, [1, 0, 0, 1, 0, 0], 800, 800);
+  assert.deepEqual(run([...strip(100), ...strip(150), ...strip(200), ...icon]), [{ x0: 100, y0: 100, x1: 500, y1: 250 }]);
+  assert.deepEqual(run([[OPS.paintFormXObjectBegin, [[2, 0, 0, 2, 0, 0], null]], ...strip(100), [OPS.paintFormXObjectEnd, null], ...strip(600)]),
+    [{ x0: 200, y0: 200, x1: 800, y1: 300 }, { x0: 100, y0: 600, x1: 500, y1: 650 }]);
+  assert.deepEqual(run([[OPS.paintImageXObjectRepeat, []]]), [{ x0: 0, y0: 0, x1: 800, y1: 800 }]);
+});
+
+test('аннотации: значение поля видно на странице, комментарий, его автор и ссылка скрыты', async () => {
+  const doc = await open(readFileSync(path.join(files, 'modulo.pdf')));
+  const notes = Pdf.annotationTexts(await (await doc.getPage(1)).getAnnotations({ intent: 'any' }));
+  const field = notes.find((a) => a.shown === 'RSSMRA85T10A562S');
+  assert.ok(field && field.rect.length === 4);
+  const hidden = notes.map((a) => a.hidden).join('\n');
+  assert.match(hidden, /Sentire anche giulia\.bianchi@example\.com/);
+  assert.match(hidden, /Luca Verdi/);
+  assert.match(hidden, /mailto:paolo\.neri@example\.com/);
+  await doc.cleanup();
+  assert.equal(Pdf.maskText('CF RSSMRA85T10A562S di Mario', [{ start: 23, end: 28, token: '[[PERSON_1]]' }, { start: 3, end: 19, token: '[[CF_1]]' }]), 'CF [[CF_1]] di [[PERSON_1]]');
+});

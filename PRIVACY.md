@@ -11,7 +11,7 @@ analytics and no telemetry. We at Via-Tech, the developer, never receive any of 
 
 **What it does with your data.** When you write in ChatGPT (chatgpt.com, chat.openai.com), Claude
 (claude.ai), Gemini (gemini.google.com) or Perplexity (perplexity.ai), or in Microsoft Copilot,
-DeepSeek, Mistral Le Chat or Grok if you turned them on in the settings, the extension looks for personal data in your text and in the files you attach (text files, PDF, Word, Excel, PowerPoint, whose text is read on your computer):
+DeepSeek, Mistral Le Chat or Grok if you turned them on in the settings, the extension looks for personal data in your text and in the files you attach (text files, PDF, Word, Excel, PowerPoint and images, which are read on your computer, including the text on images and scanned pages):
 card numbers, IBANs, tax codes, phone numbers, e-mail addresses, keys and passwords, and names and
 addresses. Names and addresses are found by your dictionary and by a recognition model that is part
 of the extension and runs on your computer. Before the page sends anything, it replaces each value
@@ -66,7 +66,7 @@ né telemetria. Noi di Via-Tech, che sviluppiamo l'estensione, non riceviamo mai
 
 **Cosa fa con i tuoi dati.** Quando scrivi in ChatGPT (chatgpt.com, chat.openai.com), Claude
 (claude.ai), Gemini (gemini.google.com) o Perplexity (perplexity.ai), oppure in Microsoft Copilot,
-DeepSeek, Mistral Le Chat o Grok se li hai attivati nelle impostazioni, l'estensione cerca i dati personali nel testo e nei file che alleghi (file di testo, PDF, Word, Excel, PowerPoint, il cui testo viene letto sul tuo computer): numeri di
+DeepSeek, Mistral Le Chat o Grok se li hai attivati nelle impostazioni, l'estensione cerca i dati personali nel testo e nei file che alleghi (file di testo, PDF, Word, Excel, PowerPoint e immagini, che vengono letti sul tuo computer, compreso il testo nelle immagini e nelle pagine scansionate): numeri di
 carta, IBAN, codici fiscali, telefoni, indirizzi e-mail, chiavi e password, nomi e indirizzi. Nomi e
 indirizzi li trovano il tuo dizionario e un modello di riconoscimento che fa parte dell'estensione e
 gira sul tuo computer. Prima che la pagina invii qualcosa, sostituisce ogni valore con
@@ -121,7 +121,7 @@ https://github.com/viatech-labs/velami
 
 **Что оно делает с данными.** Когда вы пишете в ChatGPT (chatgpt.com, chat.openai.com), Claude
 (claude.ai), Gemini (gemini.google.com) или Perplexity (perplexity.ai), а также в Microsoft Copilot,
-DeepSeek, Mistral Le Chat или Grok, если вы включили их в настройках, расширение ищет личные данные в тексте и в прикреплённых файлах (текстовые, PDF, Word, Excel, PowerPoint, их текст читается на вашем компьютере): номера карт,
+DeepSeek, Mistral Le Chat или Grok, если вы включили их в настройках, расширение ищет личные данные в тексте и в прикреплённых файлах (текстовые, PDF, Word, Excel, PowerPoint и картинки, они читаются на вашем компьютере, включая текст на картинках и отсканированных страницах): номера карт,
 IBAN, налоговые коды, телефоны, адреса e-mail, ключи и пароли, имена и адреса. Имена и адреса ищут
 ваш словарь и модель распознавания, которая входит в расширение и работает на вашем компьютере.
 До того как страница что-то отправит, каждое значение заменяется меткой вроде `[[EMAIL_1]]`.

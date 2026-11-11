@@ -51,8 +51,9 @@ case endings.
 
 **Files:** text files are cleaned in place. Word, Excel and PowerPoint are read locally in full,
 including metadata, comments and their authors, tracked changes, fields, links, charts and embedded
-workbooks, and go out as the same document with labels instead of the data. PDF up to 30 pages, scanned
-pages included, goes out as a PDF with the same pages, the data covered by labels and a text layer
+workbooks, and go out as the same document with labels instead of the data. PDF is read in full too: the text, scanned
+pages and images on the pages, form fields, comments, links, document properties and embedded files.
+PDF up to 30 pages goes out as a PDF with the same pages, the data covered by labels and a text layer
 with labels, longer PDF as a clean text copy. On images (PNG, JPEG, WebP, GIF, BMP), and on images inside Office
 documents, Velami reads the text on the device (Tesseract, Italian, English, Russian), covers the
 data with labels and removes location and camera data. Files Velami cannot read are held back until

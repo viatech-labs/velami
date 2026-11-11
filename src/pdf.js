@@ -85,6 +85,87 @@
     return runs.filter((r) => r.text.trim()).map(({ x0, y0, x1, y1, text: t }) => ({ x0, y0, x1, y1, text: t }));
   }
 
+  /* Места картинок на странице в пикселях её отрисовки: по списку операций pdf.js с учётом матриц.
+     На картинке может быть текст, которого нет в текстовом слое. Соседние куски (скан, нарезанный
+     полосами) склеиваются. Если картинок слишком много или встретилась операция, чьё место здесь
+     не считается, возвращается вся страница. */
+  function imageRegions(fnArray, argsArray, OPS, transform, width, height) {
+    const whole = [{ x0: 0, y0: 0, x1: width, y1: height }];
+    const stack = [];
+    let m = Array.from(transform);
+    let out = [];
+    for (let i = 0; i < fnArray.length; i++) {
+      const fn = fnArray[i];
+      const a = argsArray[i];
+      if (fn === OPS.save) stack.push(m);
+      else if (fn === OPS.restore) { if (stack.length) m = stack.pop(); }
+      else if (fn === OPS.transform) m = mul(m, a);
+      else if (fn === OPS.paintFormXObjectBegin) { stack.push(m); if (a && a[0]) m = mul(m, a[0]); }
+      else if (fn === OPS.paintFormXObjectEnd) { if (stack.length) m = stack.pop(); }
+      else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject) {
+        const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]];
+        const ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]];
+        const r = { x0: Math.max(0, Math.min(...xs)), y0: Math.max(0, Math.min(...ys)), x1: Math.min(width, Math.max(...xs)), y1: Math.min(height, Math.max(...ys)) };
+        if (r.x1 - r.x0 >= 1 && r.y1 - r.y0 >= 1) out.push(r);
+      } else if (fn === OPS.paintImageXObjectRepeat || fn === OPS.paintImageMaskXObjectRepeat || fn === OPS.paintImageMaskXObjectGroup || fn === OPS.paintInlineImageXObjectGroup) {
+        return whole;
+      }
+    }
+    for (let merged = true; merged;) {
+      merged = false;
+      for (let i = 0; i < out.length && !merged; i++) {
+        for (let j = i + 1; j < out.length; j++) {
+          const p = out[i];
+          const q = out[j];
+          if (p.x0 <= q.x1 + 2 && q.x0 <= p.x1 + 2 && p.y0 <= q.y1 + 2 && q.y0 <= p.y1 + 2) {
+            out[i] = { x0: Math.min(p.x0, q.x0), y0: Math.min(p.y0, q.y0), x1: Math.max(p.x1, q.x1), y1: Math.max(p.y1, q.y1) };
+            out.splice(j, 1);
+            merged = true;
+            break;
+          }
+        }
+      }
+    }
+    /* На картинке уже 30 или ниже 12 пикселей читаемого текста нет: линейки, значки, маркеры. */
+    out = out.filter((r) => r.x1 - r.x0 >= 30 && r.y1 - r.y0 >= 12);
+    return out.length > 12 ? whole : out;
+  }
+
+  /* Текст аннотаций pdf.js: shown рисуется на странице (значение поля формы, надпись), hidden нет
+     (автор и текст комментария, адрес ссылки, описание). */
+  function annotationTexts(list) {
+    const str = (v) => (typeof v === 'string' ? v : v && typeof v.str === 'string' ? v.str : '');
+    const out = [];
+    for (const a of list || []) {
+      const shown = [];
+      const hidden = [];
+      const v = a.fieldValue;
+      if (typeof v === 'string') shown.push(v);
+      else if (Array.isArray(v)) shown.push(...v.filter((x) => typeof x === 'string'));
+      const contents = str(a.contentsObj) || str(a.contents);
+      if (Array.isArray(a.textContent) && a.textContent.length) shown.push(a.textContent.join('\n'));
+      if (a.subtype === 'FreeText') shown.push(contents);
+      else hidden.push(contents);
+      hidden.push(str(a.titleObj), str(a.richText), typeof a.url === 'string' ? a.url : typeof a.unsafeUrl === 'string' ? a.unsafeUrl : '', str(a.alternativeText));
+      const keep = (t) => t && t.trim().length > 1 && t !== 'Off';
+      const item = { rect: Array.isArray(a.rect) && a.rect.length === 4 ? a.rect : null, shown: [...new Set(shown.filter(keep))].join('\n'), hidden: [...new Set(hidden.filter(keep))].filter((t) => !shown.includes(t)).join('\n') };
+      if (item.shown || item.hidden) out.push(item);
+    }
+    return out;
+  }
+
+  /* Текст, где найденные места заменены метками. */
+  function maskText(text, spans) {
+    let out = '';
+    let at = 0;
+    for (const sp of [...spans].sort((p, q) => p.start - q.start)) {
+      if (sp.start < at) continue;
+      out += text.slice(at, sp.start) + sp.token;
+      at = sp.end;
+    }
+    return out + text.slice(at);
+  }
+
   /* ---------- запись ---------- */
 
   const enc = new TextEncoder();
@@ -161,5 +242,5 @@
     return bytes;
   }
 
-  return { textLayout, maskedRuns, write };
+  return { textLayout, maskedRuns, imageRegions, annotationTexts, maskText, write };
 });

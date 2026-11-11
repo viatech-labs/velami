@@ -15,7 +15,7 @@ const out = path.join(root, 'test', 'artifacts', 'files');
 mkdirSync(out, { recursive: true });
 
 const SECRETS = ['mario.rossi@example.com', '4111 1111 1111 1111', 'IT60 X054 2811 1010 0000 0123 456', 'RSSMRA85T10A562S'];
-const LEFT = /Rossi|Bianchi|Verdi|example\.com|example%40|RSSMRA|4111|IT60 ?X054|347 ?123/i;
+const LEFT = /Rossi|Bianchi|Verdi|example\.com|example%40|RSSMRA|4111|IT60 ?X054|347 ?123|333 ?123/i;
 const OFFICE = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -306,6 +306,49 @@ try {
     assert.ok(scanCopy.text.includes('[[EMAIL_1]]'), 'нет метки в слое: ' + scanCopy.text);
     assert.ok(!LEFT.test(scanCopy.text), 'утекло в слой: ' + scanCopy.text);
     assert.ok(!LEFT.test(scanSeen), 'на странице осталось: ' + scanSeen);
+  });
+
+  /* PDF, где в тексте страниц данных нет: они на вставленной картинке, в поле формы, в комментарии,
+     ссылке и свойствах документа. */
+  await pick('modulo.pdf');
+  const formAsk = textOf(await waitDialog(400));
+  await press('Invia copia pulita');
+  const formSent = await sent('modulo.pdf', 600);
+  assert.ok(formSent, 'копия modulo.pdf не загружена');
+  const formCopy = await pdfLayers(formSent.bytes);
+  const formSeen = await ocrText(formCopy.images[0]);
+  writeFileSync(path.join(out, 'modulo-sent-p1.jpg'), formCopy.images[0]);
+  check('PDF со скрытыми местами: найдены данные на картинке, в поле формы, комментарии, ссылке и свойствах', () => {
+    assert.match(formAsk, /Dati personali in «modulo\.pdf»/);
+    for (const t of ['IBAN', 'Codice fiscale', 'Telefono']) assert.ok(formAsk.includes(t), 'в окне нет ' + t + ': ' + formAsk);
+    assert.match(formAsk, /E-mail ×[3-9]/);
+  });
+  check('PDF со скрытыми местами: в копии закрыты картинка и поле, нет комментария, ссылки и автора', () => {
+    assert.ok(!LEFT.test(formCopy.raw), 'в байтах PDF осталось значение');
+    assert.equal(String(formCopy.raw.match(/paolo|Luca|Annot|URI|Author/)), 'null');
+    assert.ok(!LEFT.test(formCopy.text) && !/333 ?123/.test(formCopy.text), 'в слое осталось: ' + formCopy.text);
+    assert.match(formCopy.text, /\[\[CF_\d+\]\]/);
+    assert.ok(!LEFT.test(formSeen), 'на странице осталось: ' + formSeen);
+    assert.ok(labelsOn(formSeen).length >= 5, 'меток не видно: ' + formSeen);
+    assert.match(formSeen, /Modulo di richiesta/);
+  });
+
+  /* PDF с вложенным файлом: текстовое вложение читается, двоичное нет, и Velami об этом спрашивает. */
+  await pick('allegato.pdf');
+  const attachAsk = textOf(await waitDialog(400));
+  await press('Invia copia pulita');
+  const attachSent = await sent('allegato.pdf', 600);
+  assert.ok(attachSent, 'копия allegato.pdf не загружена');
+  const attachRaw = Buffer.from(attachSent.bytes).toString('latin1');
+  await pick('allegato-binario.pdf');
+  const binAsk = textOf(await waitDialog(400));
+  await press('Annulla');
+  check('PDF с вложенным файлом: данные из вложения найдены, в копии вложения нет, нечитаемое вложение под вопросом', () => {
+    assert.match(attachAsk, /Dati personali in «allegato\.pdf»/);
+    assert.ok(attachAsk.includes('IBAN'), attachAsk);
+    assert.ok(!/EmbeddedFile|contatti|Filespec/.test(attachRaw) && !LEFT.test(attachRaw), 'вложение осталось в копии');
+    assert.match(binAsk, /file incorporati/);
+    assert.equal(uploads['allegato-binario.pdf'], undefined);
   });
 
   /* Картинка с данными: та же картинка, места закрыты метками. */

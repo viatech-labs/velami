@@ -1,6 +1,6 @@
 // Тестовые документы с выдуманными данными: docx, xlsx, pptx, PDF с текстом, PDF-скан без текста,
 // PDF с паролем. node test/fixtures/make-files.mjs -> test/fixtures/files/
-// Нужны python3 с python-docx, openpyxl и pypdf (только для пересборки, файлы лежат в git).
+// Нужны python3 с python-docx, python-pptx, openpyxl и pypdf (только для пересборки, файлы лежат в git).
 import puppeteer from 'puppeteer';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -36,13 +36,19 @@ ws2 = wb.create_sheet('Note')
 ws2['B2'] = 'Chiamare il +39 347 123 4567'
 wb.save(os.path.join(d, 'clienti.xlsx'))
 
-slide = ('<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
-  'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody>'
-  '<a:p><a:r><a:t>Cliente: Mario Rossi</a:t></a:r></a:p><a:p><a:r><a:t>Contatto mario.rossi@</a:t></a:r><a:r><a:t>example.com</a:t></a:r></a:p>'
-  '</p:txBody></p:sp></p:spTree></p:cSld></p:sld>')
-with zipfile.ZipFile(os.path.join(d, 'presentazione.pptx'), 'w', zipfile.ZIP_DEFLATED) as z:
-  z.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
-  z.writestr('ppt/slides/slide1.xml', slide)
+# Настоящая презентация: сайты (DeepSeek) отказываются разбирать пакет без связей и мастер-слайда.
+# Адрес почты разбит на два фрагмента текста, как это делает PowerPoint после правки.
+from pptx import Presentation
+from pptx.util import Inches
+prs = Presentation()
+box = prs.slides.add_slide(prs.slide_layouts[6]).shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(2)).text_frame
+box.paragraphs[0].add_run().text = 'Cliente: Mario Rossi'
+p2 = box.add_paragraph()
+p2.add_run().text = 'Contatto mario.rossi@'
+p2.add_run().text = 'example.com'
+prs.core_properties.author = 'Studio Demo'
+prs.core_properties.last_modified_by = 'Studio Demo'
+prs.save(os.path.join(d, 'presentazione.pptx'))
 `;
 execFileSync('python3', ['-c', PY, dir], { stdio: 'inherit' });
 
@@ -176,6 +182,43 @@ doc.add_paragraph('Allego la ricevuta del bonifico.')
 doc.add_picture(os.path.join(d, 'bonifico.png'), width=Cm(15))
 doc.core_properties.author = 'Velami'
 doc.save(os.path.join(d, 'ricevuta.docx'))
+`, dir], { stdio: 'inherit' });
+
+/* PDF, где на страницах в тексте данных нет: они на вставленной картинке, в поле формы, в комментарии
+   и его авторе, в ссылке и в свойствах документа. И PDF с чистым текстом и вложенным файлом. Нужен PyMuPDF. */
+execFileSync('python3', ['-c', String.raw`
+import os, sys, fitz
+d = sys.argv[1]
+doc = fitz.open()
+page = doc.new_page()
+page.insert_text((72, 90), 'Modulo di richiesta', fontsize=20)
+page.insert_text((72, 130), 'In allegato la ricevuta del bonifico e i dati del richiedente.', fontsize=11)
+page.insert_image(fitz.Rect(72, 160, 472, 310), filename=os.path.join(d, 'bonifico.png'))
+page.insert_text((72, 350), 'Codice fiscale del richiedente:', fontsize=11)
+w = fitz.Widget()
+w.field_name = 'cf'; w.field_type = fitz.PDF_WIDGET_TYPE_TEXT; w.rect = fitz.Rect(240, 336, 420, 356)
+w.field_value = 'RSSMRA85T10A562S'; w.text_fontsize = 11
+page.add_widget(w)
+note = page.add_text_annot((500, 90), 'Sentire anche giulia.bianchi@example.com')
+note.set_info(title='Luca Verdi'); note.update()
+page.insert_text((72, 392), 'Scrivici', fontsize=11)
+page.insert_link({'kind': fitz.LINK_URI, 'from': fitz.Rect(72, 380, 130, 396), 'uri': 'mailto:paolo.neri@example.com'})
+doc.set_metadata({'title': 'Modulo', 'author': 'Mario Rossi'})
+doc.save(os.path.join(d, 'modulo.pdf'), deflate=True)
+
+doc = fitz.open()
+page = doc.new_page()
+page.insert_text((72, 90), 'Verbale della riunione del gruppo di lavoro', fontsize=14)
+page.insert_text((72, 120), 'Il materiale completo si trova nei file incorporati in questo documento.', fontsize=11)
+doc.embfile_add('contatti.txt', b'Referente: mario.rossi@example.com, IBAN IT60 X054 2811 1010 0000 0123 456', filename='contatti.txt')
+doc.save(os.path.join(d, 'allegato.pdf'), deflate=True)
+
+doc = fitz.open()
+page = doc.new_page()
+page.insert_text((72, 90), 'Verbale della riunione del gruppo di lavoro', fontsize=14)
+page.insert_text((72, 120), 'Il materiale completo si trova nei file incorporati in questo documento.', fontsize=11)
+doc.embfile_add('dati.bin', bytes(range(256)) * 8, filename='dati.bin')
+doc.save(os.path.join(d, 'allegato-binario.pdf'), deflate=True)
 `, dir], { stdio: 'inherit' });
 
 // PDF с паролем (pypdf): такой файл не читается и не должен уйти молча.
