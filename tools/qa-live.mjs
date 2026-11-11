@@ -55,6 +55,10 @@ const CASES = {
   },
   pdf: { file: 'estratto.pdf', press: 'clean', message: 'Chi è l’intestatario dell’estratto conto allegato e qual è il saldo?', secrets: [IT.name, IT.email, IT.iban, IT.cf, IT.card], shown: [IT.name] },
   'pdf-long': { file: 'relazione-lunga.pdf', press: 'clean', message: 'Chi firma il documento allegato? Rispondi con il nome completo.', secrets: ['Luca Bianchi'], shown: ['Luca Bianchi'] },
+  /* Данных в тексте страниц нет: они на вставленной картинке, в поле формы, комментарии, ссылке и свойствах. */
+  'pdf-form': { file: 'modulo.pdf', press: 'clean', message: 'Che titolo ha il modulo allegato e quale codice fiscale è scritto nel campo?', secrets: [IT.name, IT.email, IT.iban, IT.cf, 'giulia.bianchi@example.com', 'paolo.neri@example.com', 'Luca Verdi'], shown: [IT.cf] },
+  /* Данные во вложенном в PDF файле. */
+  'pdf-attach': { file: 'allegato.pdf', press: 'clean', message: 'Riassumi il documento allegato in una riga.', secrets: [IT.email, IT.iban] },
   'pdf-scan': { file: 'scansione.pdf', press: 'clean', message: 'Che cosa c’è scritto nel documento allegato? Riporta il testo.', secrets: [IT.name, IT.email], shown: [IT.email] },
   image: { file: 'bonifico.png', press: 'clean', message: 'Che cosa c’è scritto nell’immagine allegata? Indica beneficiario e importo.', secrets: [IT.name, IT.email, IT.iban, IT.cf], shown: [IT.name] },
   photo: { file: 'chat-ru.jpg', press: 'clean', message: 'Что написано на картинке? Перепиши текст.', secrets: ['maria.petrova@example.com', 'Maria Petrova'], shown: [] },
@@ -75,6 +79,8 @@ const BUTTONS = {
   cancel: /^(Annulla|Cancel|Отмена)$/,
 };
 const LIMIT_REACHED = /Досягнуто ліміт повідомлень|Ви досягли ліміту повідомлень|Вы достигли лимита|You've reached (your|the) (message )?limit|You have reached (your|the) (message )?limit|Hai raggiunto il limite|limite di messaggi raggiunto|Message limit reached/i;
+/* Бесплатный Perplexity после нескольких файлов открывает форму оплаты Pro. Стенд в ней ничего не нажимает. */
+const PAYWALL = /Подтвердить и оплатить|Confirm and pay|Conferma e paga|Назад к тарифам|Back to plans|Torna ai piani/i;
 const TOKEN = /\[\[[A-Z_]+_\d+\]\]|(?<![A-Za-z0-9_])\[?(PERSON|EMAIL|CARD|IBAN|CF|PHONE|DOB|PASSPORT|PLATE|SECRET|ADDRESS)_\d+\]?(?![A-Za-z0-9_])/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new WeakMap();
@@ -167,6 +173,17 @@ async function readUpload(u) {
   }
 }
 const squeeze = (s) => String(s).replace(/\s+/g, '').toLowerCase();
+/* Значение в теле запроса может быть записано иначе, чем его набрали: Markdown ставит «\» перед
+   знаками, HTML заменяет знаки и пробелы сущностями, JSON переносит строки как \n. Для поиска
+   утечек всё это снимается, пробелы и регистр не учитываются. Без этого 11.11.2026 матрица
+   не увидела e-mail вида name\@example.com в сохранении черновика ChatGPT. */
+const ENTITY = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const loose = (s) => squeeze(String(s)
+  .replace(/\\+[nrt]/g, ' ')
+  .replace(/\\/g, '')
+  .replace(/&#[xX]([0-9a-fA-F]{1,6});/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d{1,7});/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, n) => ENTITY[n]));
 const LABEL_SEEN = /\[\[[A-Z1]{2,}_\d+\]\]|\b[A-Z1]{2,}_\d+\b/;
 
 const src = process.env.PG_EXT_DIR ? path.resolve(process.env.PG_EXT_DIR) : root;
@@ -291,13 +308,23 @@ try {
       const firstDraft = await draftText(page);
       let followup = null;
       if (c.followup) {
+        /* Значения второго ответа уже есть в первом сообщении, а порядок сообщений в DOM у сайтов
+           разный (DeepSeek держит их в обратном). Поэтому считаем, сколько раз значение было на
+           странице до вопроса и сколько стало после ответа. */
+        const before = await countOn(page, c.followup.shown);
+        const notGrown = async () => { const now = await countOn(page, c.followup.shown); return c.followup.shown.filter((v, i) => now[i] <= before[i]); };
         await focus();
         await typeText(page, cdp, site, c.followup.message);
         await sleep(1000);
         await page.keyboard.press('Enter');
         await waitAnswer(page);
         await shot('4-followup');
-        followup = await missingInAnswer(page, c.followup.message, c.followup.shown);
+        followup = await notGrown();
+        /* Модель с «размышлением» начинает ответ с паузой дольше, чем ждёт waitAnswer. */
+        for (const end = Date.now() + 45000; followup.length && Date.now() < end;) {
+          await sleep(3000);
+          followup = await notGrown();
+        }
       }
       const clipboard = c.copy ? await copyLast(page, meta) : null;
       return await finish(c, { dialogText, page, ext, since, sent, handed, sentMessage: true, missing, firstDraft, followup, clipboard, site, name });
@@ -313,6 +340,11 @@ writeReport();
 
 /* Свои значения пользователь видит в собственном сообщении настоящими, поэтому ответ модели ищем
    только в тексте после сообщения. Конец сообщения без личных данных служит якорем. */
+async function countOn(page, values) {
+  const text = await readText(page);
+  return values.map((v) => text.split(v).length - 1);
+}
+
 async function missingInAnswer(page, message, values = []) {
   const text = await readText(page);
   const anchor = message.slice(-40);
@@ -373,7 +405,7 @@ async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessa
   const log = (await ext({ type: 'getLog' })).filter((e) => e.at >= since);
   const decode = (s) => { try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch { return s; } };
   const secrets = c.secrets || [];
-  const leaked = c.expectOriginal ? [] : sent.filter((b) => b.body && secrets.some((v) => b.body.includes(v) || decode(b.body).includes(v)))
+  const leaked = c.expectOriginal ? [] : sent.filter((b) => b.body && secrets.some((v) => b.body.includes(v) || decode(b.body).includes(v) || loose(b.body).includes(loose(v)) || loose(decode(b.body)).includes(loose(v))))
     .map((b) => `${b.kind} ${b.url.slice(0, 80)}`);
   const unread = sent.filter((b) => b.kind === 'upload' && b.body === null).length;
   /* Файлы: один и тот же файл сайт может отправить несколько раз (повтор, превью), разбираем каждый один раз. */
@@ -401,12 +433,19 @@ async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessa
   /* Бесплатный аккаунт упёрся в лимит: модель не ответила, проверять нечего, кроме утечек. */
   const limit = !leaked.length && pageText.match(LIMIT_REACHED);
   if (limit) return { ok: null, skipped: 'у аккаунта кончился лимит сообщений: ' + limit[0], requests: sent.length, labelsSeen };
+  const paywall = !leaked.length && pageText.match(PAYWALL);
+  if (paywall) return { ok: null, skipped: 'сайт вместо отправки показал оплату тарифа: ' + paywall[0], requests: sent.length, labelsSeen };
   /* Если ушло сообщение или чистая копия, метки обязаны быть в перехваченном трафике.
      Нет меток: скрипт не видел нужный запрос, и «утечки нет» ничего не доказывает. */
   if ((sentMessage && secrets.length) || c.press === 'clean' || (c.file && !c.press)) {
     if (!labelsSeen) problems.push('в перехваченном трафике нет меток: проверка утечек слепая');
   }
-  if (alarms.length) problems.push('тревога в журнале: ' + alarms.join(','));
+  if (alarms.length) {
+    problems.push('тревога в журнале: ' + alarms.join(','));
+    /* Что именно встревожило расширение: адрес, причина и запросы, которые оно записало. */
+    extra.alarms = log.filter((e) => ['leak', 'unchecked', 'coverage', 'blocked'].includes(e.kind))
+      .map((e) => ({ kind: e.kind, host: e.host, path: e.path, method: e.method, reason: e.reason, note: e.note, types: e.types, requests: e.requests }));
+  }
   if (c.dialog && !(dialogText && c.dialog.test(dialogText))) problems.push('окно без ожидаемого текста');
   if (c.file && c.press === 'cancel' && (filesSent.length || sent.some((b) => b.body && b.body.includes(path.basename(c.file))))) problems.push('файл ушёл после «Отмена»');
   /* Тот же формат: чистая копия PDF обязана быть PDF от Velami, картинка картинкой, Office документом. */
@@ -442,7 +481,9 @@ async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessa
     if (clipboard.error) problems.push('копирование: ' + clipboard.error);
     else if (TOKEN.test(clipboard.text)) problems.push('в буфере метка: ' + clipboard.text.match(TOKEN)[0]);
     else {
-      const want = (c.followup ? c.followup.shown : c.shown).filter((v) => !clipboard.text.includes(v));
+      /* Чего модель не написала в ответе (отказ), того нет и в буфере: это не ошибка копирования. */
+      const skippedByModel = c.followup ? [] : (extra.modelSkipped || []);
+      const want = (c.followup ? c.followup.shown : c.shown).filter((v) => !clipboard.text.includes(v) && !skippedByModel.includes(v));
       if (want.length) problems.push('в буфере нет ' + want.join(', '));
     }
   }
@@ -489,7 +530,7 @@ async function uploadQuota(page, site) {
 async function dismissPopups(page) {
   for (let i = 0; i < 4; i++) {
     const closed = await page.evaluate(() => {
-      const re = /^(Rifiuta|Reject|Only necessary|Solo necessari|Только обязательные|Пропустить|Пропустити|Skip|Salta|Может быть, позже|Maybe later|Forse più tardi|Не сейчас|Not now)/i;
+      const re = /^(Rifiuta|Reject|Only necessary|Solo necessari|Только обязательные|Пропустить|Пропустити|Skip|Salta|Может быть, позже|Maybe later|Forse più tardi|Не сейчас|Not now|Пізніше|Позже|Later|Più tardi)/i;
       const b = [...document.querySelectorAll('button')].find((x) => x.getBoundingClientRect().height > 0 && re.test(x.textContent.trim()));
       if (b) b.click();
       return !!b;
@@ -558,16 +599,38 @@ async function copyLast(page, meta) {
   await browser.defaultBrowserContext().overridePermissions(new URL(meta.url).origin, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
   await page.bringToFront();
   await page.evaluate(() => navigator.clipboard.writeText('-')).catch(() => {});
-  const btns = await page.$$('[data-testid="copy-turn-action-button"], [data-testid="action-bar-copy"], button[aria-label^="Copy" i], button[aria-label^="Copia" i], button[aria-label^="Копировать" i], button[aria-label^="Скопировать" i], button[aria-label^="Копіювати" i], button[aria-label^="Скопіювати" i]');
-  const visible = [];
-  for (const b of btns) { const box = await b.boundingBox(); if (box && box.width > 0) visible.push(box); }
+  let btns = await page.$$('[data-testid="copy-turn-action-button"], [data-testid="action-bar-copy"], button[aria-label^="Copy" i], button[aria-label^="Copia" i], button[aria-label^="Копировать" i], button[aria-label^="Скопировать" i], button[aria-label^="Копіювати" i], button[aria-label^="Скопіювати" i]');
+  const shown = async (list) => {
+    const out = [];
+    for (const b of list) { const box = await b.boundingBox(); if (box && box.width > 0) out.push(b); }
+    return out;
+  };
+  let visible = await shown(btns);
+  if (!visible.length) {
+    /* DeepSeek: кнопки под ответом без подписей. Под ответом их ряд из пяти и больше, первая копирует. */
+    await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.ds-flex')].filter((r) => r.querySelectorAll(':scope > .ds-button[role="button"]').length >= 5);
+      const row = rows[rows.length - 1];
+      if (row) row.querySelector(':scope > .ds-button[role="button"]').setAttribute('data-qa-copy', '1');
+    }).catch(() => {});
+    visible = await shown(await page.$$('[data-qa-copy]'));
+  }
   if (!visible.length) return { error: 'нет кнопки «Копировать»' };
-  const b = visible[visible.length - 1];
+  /* Последняя кнопка бывает под полем ввода или ниже окна: клик по координатам попал бы мимо. */
+  const el = visible[visible.length - 1];
+  await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await sleep(400);
+  const b = await el.boundingBox();
+  const over = await page.evaluate((x, y) => { const t = document.elementFromPoint(x, y); return t ? t.tagName + '.' + String(t.className).slice(0, 40) : null; }, b.x + b.width / 2, b.y + b.height / 2);
+  const hit = await el.evaluate((e, x, y) => { const t = document.elementFromPoint(x, y); return !!t && (e === t || e.contains(t)); }, b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  if (hit) await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  else return { error: 'кнопка «Копировать» закрыта другим элементом: ' + over };
   await sleep(1500);
-  const text = await page.evaluate(() => navigator.clipboard.readText()).catch((e) => null);
-  if (text == null) return { error: 'буфер не читается' };
+  await page.bringToFront();
+  const read = await page.evaluate(() => navigator.clipboard.readText().then((t) => ({ t }), (e) => ({ e: `${e.name}: ${e.message}`, focus: document.hasFocus(), active: document.activeElement && document.activeElement.tagName })));
+  if (read.e) return { error: `буфер не читается (${read.e}; фокус: ${read.focus}, активен ${read.active})` };
+  const text = read.t;
   if (text === '-') return { error: 'сайт ничего не записал в буфер' };
   return { text };
 }
