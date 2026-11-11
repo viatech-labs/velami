@@ -23,12 +23,15 @@ the extension shows the real values again, only on your screen.
 
 - settings and your dictionary;
 - the label vault, which links each label to its real value, so answers can be shown with real values;
-- the log of the last 300 checked requests (the body as it was sent, with labels, and its SHA-256);
+- the log of the last 300 checked requests and files (the body as it was sent, with labels, and its SHA-256, and for a file the name, size and SHA-256 of the clean copy the site received);
 - daily counters shown in the popup.
 
 If your organization manages Velami, its policy (settings and an organization dictionary) comes from
 your browser's managed storage (`chrome.storage.managed`), set by your administrator. Velami only
 reads it and never sends it anywhere.
+
+Attached files and their clean copies are not stored: they are read in memory, and the copy you open in the
+preview stays in the chat tab until you close it.
 
 The list of names and addresses found by the model is kept only in memory, for up to 30 minutes, and
 is never written to disk. A value that was actually replaced goes to the label vault like any other.
@@ -78,12 +81,15 @@ l'estensione rimette i valori reali, solo sul tuo schermo.
 
 - le impostazioni e il tuo dizionario;
 - l'archivio delle etichette, che collega ogni etichetta al suo valore reale, per mostrare le risposte con i valori reali;
-- il registro delle ultime 300 richieste controllate (il corpo così come è stato inviato, con le etichette, e il suo SHA-256);
+- il registro delle ultime 300 richieste e file controllati (il corpo così come è stato inviato, con le etichette, e il suo SHA-256, e per un file il nome, la dimensione e lo SHA-256 della copia pulita ricevuta dal sito);
 - i contatori giornalieri mostrati nel popup.
 
 Se Velami è gestito dalla tua organizzazione, la sua policy (impostazioni e dizionario
 dell'organizzazione) arriva dallo spazio gestito del browser (`chrome.storage.managed`), impostato
 dall'amministratore. Velami la legge soltanto e non la invia da nessuna parte.
+
+I file allegati e le loro copie pulite non vengono conservati: vengono letti in memoria, e la copia che apri
+nell'anteprima resta nella scheda della chat finché non la chiudi.
 
 L'elenco dei nomi e degli indirizzi trovati dal modello resta solo in memoria, al massimo per 30
 minuti, e non viene mai scritto su disco. Un valore effettivamente sostituito finisce nell'archivio
@@ -133,12 +139,15 @@ IBAN, налоговые коды, телефоны, адреса e-mail, клю
 
 - настройки и ваш словарь;
 - хранилище меток, где каждой метке соответствует настоящее значение, чтобы показывать ответы с настоящими значениями;
-- журнал последних 300 проверенных запросов (тело в том виде, в каком ушло, с метками, и его SHA-256);
+- журнал последних 300 проверенных запросов и файлов (тело в том виде, в каком ушло, с метками, и его SHA-256, а для файла имя, размер и SHA-256 чистой копии, которую получил сайт);
 - дневные счётчики во всплывающем окне.
 
 Если Velami управляет ваша организация, её политика (настройки и словарь организации) приходит из
 управляемого хранилища браузера (`chrome.storage.managed`), которое задаёт администратор. Velami
 только читает её и никуда не отправляет.
+
+Прикреплённые файлы и их чистые копии не сохраняются: они читаются в памяти, а копия, которую вы открыли
+в предпросмотре, живёт во вкладке чата, пока вы её не закроете.
 
 Список имён и адресов, найденных моделью, хранится только в памяти, не дольше 30 минут, и никогда
 не записывается на диск. Значение, которое действительно заменили, попадает в хранилище меток, как

@@ -98,12 +98,12 @@ export function brochureHtml({ version, date, prompt, message }) {
     page('', `
       <p class="eyebrow">File allegati</p>
       <h2>Anche i file vengono ripuliti, prima che il sito li veda.</h2>
-      <p class="intro">Quando scegli, trascini o incolli un file di testo, Velami lo legge sul tuo computer e passa al sito una copia con le etichette. Il sito non vede mai l’originale. Un avviso ti dice quanti dati sono stati nascosti e di che tipo.</p>
+      <p class="intro">Quando scegli, trascini o incolli un file, Velami lo legge sul tuo computer e passa al sito una copia con le etichette nello stesso formato. Il sito non vede mai l’originale. Un avviso ti dice quanti dati sono stati nascosti e di che tipo.</p>
       ${fig('file.png', 'Un CSV con nome, e-mail, IBAN e una chiave API. Il sito riceve solo la copia con le etichette.', 'wide')}
       <div class="grid3 mt">
-        <div class="card plain"><b>Cosa viene ripulito</b><p>File di testo fino a 2 MB: txt, csv, md, json, codice sorgente e simili.</p></div>
+        <div class="card plain"><b>Cosa viene ripulito</b><p>File di testo, Word, Excel, PowerPoint, PDF anche scansionati e immagini. I documenti vengono letti per intero, con commenti, revisioni, proprietà e immagini al loro interno.</p></div>
         <div class="card plain"><b>Se qualcosa va storto</b><p>Se il controllo non riesce, il file non viene passato al sito. Meglio un file in meno che un file non controllato.</p></div>
-        <div class="card plain"><b>PDF, Office, immagini</b><p>Da PDF, Word, Excel e PowerPoint legge il testo e propone una copia di testo con le etichette. Immagini e scansioni le ferma e ti chiede prima di inviarle.</p></div>
+        <div class="card plain"><b>La copia si vede prima</b><p>Prima dell’invio puoi aprire la copia e vedere esattamente cosa riceverà il sito. Nome, dimensione e SHA-256 di ogni copia inviata restano nel registro.</p></div>
       </div>`),
 
     page('', `
@@ -179,7 +179,7 @@ export function brochureHtml({ version, date, prompt, message }) {
           <tr><td><span class="badge g">Inviato al modello</span></td><td>Il messaggio partito verso la chat IA, con le etichette.</td></tr>
           <tr><td><span class="badge">Richiesta del sito</span></td><td>Analytics o richieste di servizio della pagina che contenevano i tuoi dati. Anche queste vengono ripulite.</td></tr>
           <tr><td><span class="badge g">File controllato</span></td><td>Un file allegato, con quello che ha ricevuto il sito al suo posto.</td></tr>
-          <tr><td><span class="badge o">Non controllato</span></td><td>Un file che Velami non sa ancora leggere, partito con un avviso.</td></tr>
+          <tr><td><span class="badge o">Non controllato</span></td><td>Un file che Velami non è riuscito a leggere o che hai deciso di inviare così com’è.</td></tr>
           <tr><td><span class="badge o">Fuga non sostituita</span></td><td>Dati usciti da un canale che Velami non può modificare, come un WebSocket. Velami lo segnala.</td></tr>
           <tr><td><span class="badge r">Bloccato</span></td><td>Velami ha fermato l’invio, per esempio perché il collegamento con l’estensione si era interrotto.</td></tr>
           <tr><td><span class="badge r">Fuori da Velami</span></td><td>Un messaggio è partito senza passare da Velami. Il pulsante sul sito diventa rosso.</td></tr>
@@ -266,7 +266,7 @@ export function brochureHtml({ version, date, prompt, message }) {
         <div><h4>Il sito vede lo schermo</h4><p>Il sito della chat vede quello che scrivi nella casella prima dell’invio e la risposta con i valori veri. Velami protegge dal fatto che i tuoi dati finiscano sui server e nell’addestramento, non da un sito che cifra apposta i dati per aggirarlo.</p></div>
         <div><h4>Il contesto resta</h4><p>Le etichette nascondono i dati, non il significato. Da quello che racconti un modello può comunque capire di chi si parla.</p></div>
         <div><h4>Il modello può sbagliare</h4><p>Può perdere un nome raro o un indirizzo scritto in forma libera, e a volte scambia una parola comune per un nome. Il pannello e il dizionario servono a questo.</p></div>
-        <div><h4>Niente immagini</h4><p>Immagini e PDF scansionati non vengono letti. Per i documenti Office e i PDF il modello riceve una copia di testo, senza impaginazione.</p></div>
+        <div><h4>Testo nelle immagini</h4><p>Il testo in immagini e scansioni viene riconosciuto automaticamente e può essere letto con errori. Volti, firme e scrittura a mano non vengono riconosciuti. I PDF oltre 30 pagine partono come copia di testo.</p></div>
         <div><h4>Dipende dai siti</h4><p>L’intercettazione segue il modo in cui oggi funziona ogni sito. Se un sito cambia, il controllo di copertura lo segnala con il pulsante rosso.</p></div>
         <div><h4>Solo nel browser</h4><p>Funziona in Chrome su computer. Le app desktop e mobile delle chat IA non passano da Velami.</p></div>
       </div>
