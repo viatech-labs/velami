@@ -14,6 +14,10 @@ import { listFiles } from '../scripts/package-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const Sites = require('../src/sites.js');
+const Office = require('../src/office.js');
+const Img = require('../src/image.js');
+const Tesseract = require('tesseract.js');
+const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'test', 'artifacts', 'live');
 const files = path.join(root, 'test', 'fixtures', 'files');
@@ -51,7 +55,11 @@ const CASES = {
     message: `Меня зовут ${RU.name}, родилась ${RU.dob}, паспорт ${RU.passport}, телефон ${RU.phone}, почта ${RU.email}, машина ${RU.plate}. Ключ API ${RU.key}. Составь короткое заявление в страховую с этими данными.`,
     secrets: Object.values(RU), shown: ['Миронова'], copy: true,
   },
-  pdf: { file: 'relazione-lunga.pdf', press: 'clean', message: 'Chi firma il documento allegato? Rispondi con il nome completo.', secrets: ['Luca Bianchi'], shown: ['Luca Bianchi'] },
+  pdf: { file: 'estratto.pdf', press: 'clean', message: 'Chi è l’intestatario dell’estratto conto allegato e qual è il saldo?', secrets: [IT.name, IT.email, IT.iban, IT.cf, IT.card], shown: [IT.name] },
+  'pdf-long': { file: 'relazione-lunga.pdf', press: 'clean', message: 'Chi firma il documento allegato? Rispondi con il nome completo.', secrets: ['Luca Bianchi'], shown: ['Luca Bianchi'] },
+  'pdf-scan': { file: 'scansione.pdf', press: 'clean', message: 'Che cosa c’è scritto nel documento allegato? Riporta il testo.', secrets: [IT.name, IT.email], shown: [IT.email] },
+  image: { file: 'bonifico.png', press: 'clean', message: 'Che cosa c’è scritto nell’immagine allegata? Indica beneficiario e importo.', secrets: [IT.name, IT.email, IT.iban, IT.cf], shown: [IT.name] },
+  photo: { file: 'chat-ru.jpg', press: 'clean', message: 'Что написано на картинке? Перепиши текст.', secrets: ['maria.petrova@example.com', 'Maria Petrova'], shown: [] },
   docx: { file: 'richiesta.docx', press: 'clean', message: 'Riassumi il documento allegato in due righe, con il nome del cliente.', secrets: [IT.name, IT.email, IT.iban, IT.cf, IT.card], shown: [IT.name] },
   xlsx: { file: 'clienti.xlsx', press: 'clean', message: 'Quanti clienti ci sono nel file allegato e come si chiamano?', secrets: [IT.name, IT.email, IT.iban, 'Giulia Bianchi', 'giulia.bianchi@example.com'], shown: [IT.name] },
   pptx: { file: 'presentazione.pptx', press: 'clean', message: 'Chi è il cliente nella presentazione allegata e qual è il suo contatto?', secrets: [IT.name, IT.email], shown: [IT.name] },
@@ -72,6 +80,96 @@ const LIMIT_REACHED = /Досягнуто ліміт повідомлень|Ви
 const TOKEN = /\[\[[A-Z_]+_\d+\]\]|(?<![A-Za-z0-9_])\[?(PERSON|EMAIL|CARD|IBAN|CF|PHONE|DOB|PASSPORT|PLATE|SECRET|ADDRESS)_\d+\]?(?![A-Za-z0-9_])/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new WeakMap();
+
+/* ---------- что на самом деле ушло в файлах ----------
+   Тела загрузок сжаты (Office) или лежат картинкой (PDF, снимки): поиск значений по сырым байтам
+   ничего не доказывает. Файл, который страница отдала в fetch или XHR, разбирается здесь так же,
+   как его разберёт сайт: текст документа, текстовый слой PDF и OCR картинок страниц. */
+/* Файлы ловятся в момент, когда их получает сайт: событие change, drop или paste, которое Velami
+   повторяет уже с очищенными файлами (исходное он останавливает раньше). Слушатель живёт в отдельном
+   изолированном мире CDP: страница его не видит, fetch и DOM сайта не тронуты. Тела загрузок из CDP
+   для этого не годятся: двоичные данные там приходят с потерями. */
+const QA_WORLD = 'velami-qa';
+const CAPTURE = `(() => {
+  if (globalThis.__qaFiles) return;
+  const store = globalThis.__qaFiles = [];
+  const take = (files, via) => {
+    for (const f of files || []) {
+      if (f.size > 40 * 1024 * 1024) { store.push({ name: f.name, type: f.type, via, data: '' }); continue; }
+      f.arrayBuffer().then((buf) => {
+        const bytes = new Uint8Array(buf);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        store.push({ name: f.name, type: f.type, via, data: btoa(bin) });
+      }, () => {});
+    }
+  };
+  /* Слушатели ставятся после загрузки документа, то есть позже слушателей Velami (document_start) на том же
+     window: исходное событие Velami останавливает раньше, сюда доходит только то, что получает сайт. */
+  const listen = () => {
+    addEventListener('change', (e) => { const i = e.composedPath()[0]; if (i && i.type === 'file') take(i.files, 'input'); }, true);
+    addEventListener('drop', (e) => take(e.dataTransfer && e.dataTransfer.files, 'drop'), true);
+    addEventListener('paste', (e) => take(e.clipboardData && e.clipboardData.files, 'paste'), true);
+  };
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', listen, { once: true });
+  else listen();
+})()`;
+async function handedFiles(page) {
+  try {
+    const client = page._client();
+    const { frameTree } = await client.send('Page.getFrameTree');
+    const { executionContextId } = await client.send('Page.createIsolatedWorld', { frameId: frameTree.frame.id, worldName: QA_WORLD });
+    const r = await client.send('Runtime.evaluate', { contextId: executionContextId, expression: 'JSON.stringify(globalThis.__qaFiles || null)', returnByValue: true });
+    return JSON.parse(r.result.value);
+  } catch (e) {
+    console.error('handedFiles:', e.message);
+    return null;
+  }
+}
+
+let ocrWorker = null;
+async function ocrText(bytes) {
+  ocrWorker ||= await Tesseract.createWorker(['ita', 'eng', 'rus'], 1, { langPath: path.join(root, 'vendor', 'tesseract', 'lang'), cacheMethod: 'none', gzip: true });
+  return (await ocrWorker.recognize(Buffer.from(bytes))).data.text;
+}
+
+/* Текст файла глазами сайта. kind: office, pdf, image, text. seen — то, что прочитано OCR. */
+async function readUpload(u) {
+  const bytes = new Uint8Array(Buffer.from(u.data, 'base64'));
+  const base = { name: u.name, size: bytes.length };
+  try {
+    if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+      const raw = Buffer.from(bytes).toString('latin1');
+      const name = /\.(docx|xlsx|pptx|docm|xlsm|pptm)$/i.test(u.name) ? u.name : raw.includes('word/document.xml') ? 'f.docx' : raw.includes('xl/workbook.xml') ? 'f.xlsx' : raw.includes('ppt/presentation.xml') ? 'f.pptx' : '';
+      if (!name) return { ...base, kind: 'zip', text: '', seen: '' };
+      const seen = [];
+      const r = await Office.extract(bytes, name, { ocr: async (key, b) => { const t = Img.formatOf(b) ? await ocrText(b).catch(() => '') : ''; seen.push(t); return t; } });
+      return { ...base, kind: 'office', text: r.text || '', seen: seen.join('\n') };
+    }
+    if (bytes[0] === 0x25 && bytes[1] === 0x50) {
+      const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+      let text = '';
+      for (let i = 1; i <= doc.numPages; i++) text += (await (await doc.getPage(i)).getTextContent()).items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : '')).join('') + '\n';
+      const pages = doc.numPages;
+      await doc.cleanup();
+      const raw = Buffer.from(bytes);
+      let seen = '';
+      let images = 0;
+      for (let at = raw.indexOf('/DCTDecode'); at >= 0 && images < 8; at = raw.indexOf('/DCTDecode', at + 1)) {
+        const start = raw.indexOf('stream\n', at) + 7;
+        seen += await ocrText(raw.subarray(start, raw.indexOf('\nendstream', start))).catch(() => '') + '\n';
+        images++;
+      }
+      return { ...base, kind: 'pdf', text, seen, pages, velami: raw.includes('/GlyphLessFont') };
+    }
+    if (Img.formatOf(bytes)) return { ...base, kind: 'image', text: '', seen: await ocrText(bytes) };
+    return { ...base, kind: 'text', text: Buffer.from(bytes).toString('utf8'), seen: '' };
+  } catch (e) {
+    return { ...base, kind: 'broken', text: '', seen: '', error: String(e && e.message || e).slice(0, 120) };
+  }
+}
+const squeeze = (s) => String(s).replace(/\s+/g, '').toLowerCase();
+const LABEL_SEEN = /\[\[[A-Z1]{2,}_\d+\]\]|\b[A-Z1]{2,}_\d+\b/;
 
 /* Копия расширения, где необязательные сайты уже разрешены: окно разрешения Chrome
    в автоматическом браузере не нажать. Путь постоянный, чтобы id и настройки не менялись. */
@@ -122,7 +220,9 @@ try {
     const meta = Sites.SITES.find((s) => s.id === site);
     const since = Date.now();
     const page = await browser.newPage();
+    await page._client().send('Page.addScriptToEvaluateOnNewDocument', { source: CAPTURE, worldName: QA_WORLD });
     const sent = [];
+    let handed = null;
     /* HTTP: события страницы Puppeteer переживают подмену вкладки (Claude после первой отправки
        переключается на другую цель). Тело загрузки файла дочитывается отдельно. */
     page.on('request', (req) => {
@@ -178,9 +278,17 @@ try {
           const { model } = await cdp.send('DOM.getBoxModel', { nodeId: btn.nodeId });
           await page.mouse.click((model.content[0] + model.content[4]) / 2, (model.content[1] + model.content[5]) / 2);
         }
+        /* Чистая копия PDF и картинок готовится десятки секунд: ждём запись в журнале, потом загрузку сайтом. */
+        if (c.press === 'clean') {
+          const base = path.basename(file);
+          for (const end = Date.now() + 240000; Date.now() < end; await sleep(1000)) {
+            if ((await ext({ type: 'getLog' })).some((e) => e.at >= since && e.kind === 'file' && e.file === base)) break;
+          }
+        }
         await sleep(12000);
         await shot('2-attached');
-        if (c.expectSent === false || c.expectOriginal) return await finish(c, { dialogText, page, ext, since, sent, sentMessage: false });
+        handed = await handedFiles(page);
+        if (c.expectSent === false || c.expectOriginal) return await finish(c, { dialogText, page, ext, since, sent, handed, sentMessage: false });
         await focus();
       }
       await typeText(page, cdp, site, c.message);
@@ -202,13 +310,14 @@ try {
         followup = await missingInAnswer(page, c.followup.message, c.followup.shown);
       }
       const clipboard = c.copy ? await copyLast(page, meta) : null;
-      return await finish(c, { dialogText, page, ext, since, sent, sentMessage: true, missing, firstDraft, followup, clipboard, site, name });
+      return await finish(c, { dialogText, page, ext, since, sent, handed, sentMessage: true, missing, firstDraft, followup, clipboard, site, name });
     } finally {
       await page.close().catch(() => {});
     }
   }
 } finally {
   await browser.close();
+  if (ocrWorker) await ocrWorker.terminate();
 }
 writeReport();
 
@@ -267,7 +376,7 @@ async function draftText(page) {
   }
 }
 
-async function finish(c, { dialogText, page, ext, since, sent, sentMessage, missing = [], firstDraft = '', followup, clipboard, site, name }) {
+async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessage, missing = [], firstDraft = '', followup, clipboard, site, name }) {
   await sleep(1500);
   const pageText = await readText(page);
   if (site) writeFileSync(path.join(out, `${site}-${name}-page.txt`), pageText);
@@ -277,7 +386,24 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
   const leaked = c.expectOriginal ? [] : sent.filter((b) => b.body && secrets.some((v) => b.body.includes(v) || decode(b.body).includes(v)))
     .map((b) => `${b.kind} ${b.url.slice(0, 80)}`);
   const unread = sent.filter((b) => b.kind === 'upload' && b.body === null).length;
-  const labelsSeen = sent.some((b) => b.body && /\[\[[A-Z_]+_\d+\]\]/.test(decode(b.body)));
+  /* Файлы: один и тот же файл сайт может отправить несколько раз (повтор, превью), разбираем каждый один раз. */
+  const filesSent = [];
+  const seenFiles = new Set();
+  for (const u of handed || []) {
+    const key = u.name + '|' + u.data.length + '|' + u.data.slice(0, 256);
+    if (seenFiles.has(key)) continue;
+    seenFiles.add(key);
+    filesSent.push(u.data ? await readUpload(u) : { name: u.name, kind: 'big', size: 0, text: '', seen: '' });
+  }
+  if (!c.expectOriginal) {
+    for (const f of filesSent) {
+      const all = squeeze(f.text + '\n' + f.seen);
+      const found = secrets.filter((v) => all.includes(squeeze(v)));
+      if (found.length) leaked.push(`файл ${f.name || f.kind}: ${found.join(', ')}`);
+    }
+  }
+  const fileLabels = filesSent.some((f) => /\[\[[A-Z_]+_\d+\]\]/.test(f.text) || LABEL_SEEN.test(f.seen));
+  const labelsSeen = fileLabels || sent.some((b) => b.body && /\[\[[A-Z_]+_\d+\]\]/.test(decode(b.body)));
   const alarms = log.filter((e) => e.kind === 'coverage' || e.kind === 'leak').map((e) => e.kind);
   const problems = [];
   const extra = {};
@@ -292,11 +418,25 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
   }
   if (alarms.length) problems.push('тревога в журнале: ' + alarms.join(','));
   if (c.dialog && !(dialogText && c.dialog.test(dialogText))) problems.push('окно без ожидаемого текста');
-  if (c.file && c.press === 'cancel' && sent.some((b) => b.body && b.body.includes(path.basename(c.file)))) problems.push('файл ушёл после «Отмена»');
+  if (c.file && c.press === 'cancel' && (filesSent.length || sent.some((b) => b.body && b.body.includes(path.basename(c.file))))) problems.push('файл ушёл после «Отмена»');
+  /* Тот же формат: чистая копия PDF обязана быть PDF от Velami, картинка картинкой, Office документом. */
+  if (c.file && c.press === 'clean' && filesSent.length) {
+    const ext = path.extname(c.file).toLowerCase();
+    const want = ext === '.pdf' ? 'pdf' : /^\.(png|jpe?g|webp|gif|bmp)$/.test(ext) ? 'image' : 'office';
+    const same = filesSent.find((f) => f.kind === want);
+    if (!same) problems.push(`чистая копия ушла не тем форматом: ${filesSent.map((f) => f.kind + ' ' + f.name).join(', ')}`);
+    else if (want === 'pdf' && !same.velami) problems.push('ушёл PDF, собранный не Velami');
+  }
+  if (c.file && (c.press === 'clean' || !c.press) && !filesSent.length) problems.push(handed ? 'сайт не получил файл от Velami' : 'файл, отданный сайту, прочитать не удалось: проверка содержимого слепая');
   if (c.expectOriginal && !log.some((e) => e.kind === 'unchecked' && e.file === path.basename(c.file))) problems.push('оригинал не записан в журнал как выбор пользователя');
   if (c.file && c.press === 'clean' && !log.some((e) => e.kind === 'file' && e.file === path.basename(c.file))) problems.push('нет записи о чистой копии в журнале');
   if (sentMessage) {
-    if (missing.length) problems.push('в ответе нет настоящих значений: ' + missing.join(', '));
+    /* Модель вправе не повторять данные (отказ, свои заглушки вида [Nome]). Это не ошибка Velami,
+       если на странице не осталось ни одной метки: тогда возвращать было нечего. */
+    if (missing.length) {
+      if (TOKEN.test(pageText)) problems.push('в ответе нет настоящих значений: ' + missing.join(', '));
+      else extra.modelSkipped = missing;
+    }
     if (TOKEN.test(pageText)) {
       problems.push('метка на странице: ' + pageText.match(TOKEN)[0]);
       extra.tokenDom = await tokenDom(page).catch((e) => String(e));
@@ -322,6 +462,7 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
     requests: sent.length,
     labelsSeen,
     unreadUploads: unread,
+    files: filesSent.map((f) => `${f.kind} ${f.name} ${f.size}${f.error ? ' ' + f.error : ''}`),
     log: log.map((e) => `${e.kind}${e.file ? ' ' + e.file : ''}${e.summary ? ' n=' + e.summary.count : ''}`),
     dialog: dialogText,
     clipboard: clipboard && (clipboard.error || clipboard.text.slice(0, 120)),
@@ -331,10 +472,11 @@ async function finish(c, { dialogText, page, ext, since, sent, sentMessage, miss
 
 function writeReport() {
   const head = '| Сайт | ' + cases.join(' | ') + ' |\n|' + ' --- |'.repeat(cases.length + 1) + '\n';
-  const cell = (r) => !r ? '' : r.ok === null ? 'пропуск' : r.ok ? 'да' : 'НЕТ';
+  const cell = (r) => !r ? '' : r.ok === null ? 'пропуск' : r.ok ? (r.modelSkipped ? 'да*' : 'да') : 'НЕТ';
   const rows = sites.map((s) => `| ${s} | ` + cases.map((c) => cell(report.find((r) => r.site === s && r.case === c))).join(' | ') + ' |').join('\n');
   const notes = report.filter((r) => r.ok === false).map((r) => `- ${r.site} / ${r.case}: ${(r.problems || []).concat(r.error || []).join('. ')}`).join('\n');
-  writeFileSync(path.join(out, 'report.md'), `${head}${rows}\n\n${notes}\n`);
+  const soft = report.filter((r) => r.ok && r.modelSkipped).map((r) => `- ${r.site} / ${r.case}: модель не повторила ${r.modelSkipped.join(', ')}, меток на странице нет`).join('\n');
+  writeFileSync(path.join(out, 'report.md'), `${head}${rows}\n\n${notes}\n${soft ? '\n\\* ' + 'модель не назвала значение сама (отказ или свои заглушки), подставлять было нечего:\n' + soft + '\n' : ''}`);
   const ok = report.filter((r) => r.ok).length;
   const skipped = report.filter((r) => r.ok === null).length;
   console.log(`\nИтог: ${ok} из ${report.length - skipped} без замечаний, пропущено ${skipped}. ${path.join(out, 'report.md')}`);
@@ -397,7 +539,7 @@ async function giveFile(page, composer, file, via) {
     via = 'drop';
   }
   const data = readFileSync(file).toString('base64');
-  const type = { '.pdf': 'application/pdf', '.txt': 'text/plain', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }[path.extname(file)] || 'application/octet-stream';
+  const type = { '.pdf': 'application/pdf', '.txt': 'text/plain', '.png': 'image/png', '.jpg': 'image/jpeg', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }[path.extname(file)] || 'application/octet-stream';
   await composer.evaluate((el, name, t, b64, how) => {
     const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
     const dt = new DataTransfer();
