@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title data-i18n="preview.title"></title>
+  <link rel="stylesheet" href="ui/common.css">
+  <link rel="stylesheet" href="ui/preview.css">
+</head>
+<body>
+  <header class="top">
+    <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#df8462"/><stop offset="1" stop-color="#bd5a38"/></linearGradient></defs><rect width="32" height="32" rx="7.2" fill="url(#vg)"/><rect x="8" y="9" width="11" height="2.6" rx="1.3" fill="#fff" fill-opacity=".72"/><rect x="8" y="14.3" width="16" height="4.4" rx="2.2" fill="#fff"/><rect x="8" y="21.4" width="8" height="2.6" rx="1.3" fill="#fff" fill-opacity=".72"/></svg>
+    <div class="head">
+      <h1 id="title"></h1>
+      <p class="muted" id="lead"></p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="save" hidden data-i18n="preview.save"></button>
+      <button class="btn primary" id="back" data-i18n="preview.back"></button>
+    </div>
+  </header>
+
+  <main>
+    <p class="gone" id="gone" hidden data-i18n="preview.gone"></p>
+
+    <section class="facts" id="facts" hidden>
+      <div><span data-i18n="preview.file"></span><b id="f-name"></b></div>
+      <div><span data-i18n="preview.size"></span><b id="f-size"></b></div>
+      <div><span data-i18n="preview.found"></span><b id="f-found"></b></div>
+      <div class="wide"><span>SHA-256</span><b class="mono" id="f-hash"></b></div>
+    </section>
+
+    <p class="note" id="note" hidden></p>
+
+    <section id="pages" hidden>
+      <h2 data-i18n="preview.pages"></h2>
+      <div class="sheets" id="sheets"></div>
+    </section>
+
+    <section id="text" hidden>
+      <h2 id="text-title"></h2>
+      <pre id="body"></pre>
+    </section>
+  </main>
+
+  <script src="src/i18n.js"></script>
+  <script src="src/detector.js"></script>
+  <script src="src/pdf.js"></script>
+  <script src="ui/preview.js"></script>
+</body>
+</html>

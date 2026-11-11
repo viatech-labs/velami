@@ -414,6 +414,10 @@ async function extractImage(bytes) {
   return r;
 }
 
+/* Текст готовой копии, каким его прочитала проверка: его показывает предпросмотр. */
+const COPY_TEXT = 200000;
+const copyText = (t) => String(t || '').slice(0, COPY_TEXT);
+
 async function cleanImage(name, bytes, list) {
   const r = await redactBytes(bytes, list);
   if (!r) return { error: 'nothing to clean' };
@@ -421,7 +425,7 @@ async function cleanImage(name, bytes, list) {
   const left = PG.locate(again.text, list).length;
   if (left) return { error: 'values left after cleaning', left };
   const out = __PGImage.output(name, r.format);
-  return { name: out.name, type: out.type, data: toBase64(r.bytes), replaced: r.replaced };
+  return { name: out.name, type: out.type, data: toBase64(r.bytes), replaced: r.replaced, text: copyText(again.text) };
 }
 
 /* PDF той же формой. Каждая страница рисуется в PDF_DPI. Места значений берутся из текстового
@@ -507,7 +511,7 @@ async function cleanPdf(name, bytes, list) {
     /* pdf.js забирает буфер себе (transfer), поэтому на проверку уходит копия. */
     const check = await pdfText(out.slice(), { full: false });
     if (check.reason || PG.locate(check.text, list).length) return { error: 'values left after cleaning' };
-    return { name, type: 'application/pdf', data: toBase64(out), replaced, pages: pages.length };
+    return { name, type: 'application/pdf', data: toBase64(out), replaced, pages: pages.length, text: copyText(check.text) };
   } finally {
     task.destroy();
   }
@@ -561,7 +565,7 @@ async function cleanDoc({ name, data, values }) {
   const check = await __PGOffice.extract(r.bytes, r.name, { ocr: officeOcr });
   const left = PG.locate(check.text, list).length;
   if (left) return { error: 'values left after cleaning', left };
-  return { name: r.name, data: toBase64(r.bytes), replaced: r.replaced, removed: r.removed, emptied: r.emptied, images: r.images };
+  return { name: r.name, data: toBase64(r.bytes), replaced: r.replaced, removed: r.removed, emptied: r.emptied, images: r.images, text: copyText(check.text) };
 }
 
 function touch() {

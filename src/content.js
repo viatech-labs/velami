@@ -130,6 +130,9 @@
   .ask button:hover { background: var(--fill-2); }
   .ask button.primary { background: var(--accent); color: #fff; }
   .ask button.primary:hover { filter: brightness(1.06); }
+  .ask button.ask-more { display: block; height: auto; margin: 0 0 10px; padding: 0; background: none; color: var(--link); font-weight: 500; text-align: left; }
+  .ask button.ask-more:hover { background: none; text-decoration: underline; }
+  .ask button:disabled { opacity: .55; cursor: default; }
   [hidden] { display: none !important; }
 </style>
 <div class="tip" hidden></div>
@@ -140,6 +143,7 @@
     <p class="ask-text"></p>
     <p class="ask-note" hidden></p>
     <label class="ask-opt" hidden><input type="checkbox"><span></span></label>
+    <button class="ask-more" hidden></button>
     <div class="btns"></div>
   </section>
   <section class="card" hidden>
@@ -698,8 +702,9 @@
   const askEl = $('.ask');
   let askChain = Promise.resolve();
 
-  /* buttons: [{ id, label, primary }]. Ответ: { choice, option }. Escape = первая кнопка без primary. */
-  function ask({ title, text, note, option, buttons }) {
+  /* buttons: [{ id, label, primary }]. Ответ: { choice, option }. Escape = первая кнопка без primary.
+     more: { label, busy, run } это действие, которое окно не закрывает (предпросмотр копии). */
+  function ask({ title, text, note, option, buttons, more }) {
     const run = askChain.then(() => new Promise((resolve) => {
       askEl.querySelector('.ask-title').textContent = title;
       askEl.querySelector('.ask-text').textContent = text;
@@ -712,13 +717,29 @@
       opt.querySelector('span').textContent = option || '';
       const box = askEl.querySelector('.btns');
       box.textContent = '';
+      const moreEl = askEl.querySelector('.ask-more');
+      moreEl.hidden = !more;
+      moreEl.disabled = false;
+      moreEl.textContent = more ? more.label : '';
+      let busy = false;
+      moreEl.onclick = !more ? null : async () => {
+        const all = [moreEl, ...box.querySelectorAll('button')];
+        busy = true;
+        all.forEach((b) => { b.disabled = true; });
+        moreEl.textContent = more.busy;
+        try { await more.run(); } catch (e) { toast('warn', String((e && e.message) || e), 7000); }
+        moreEl.textContent = more.label;
+        all.forEach((b) => { b.disabled = false; });
+        busy = false;
+      };
       const done = (choice) => {
         askEl.hidden = true;
+        moreEl.onclick = null;
         askEl.removeEventListener('keydown', onKey);
         resolve({ choice, option: !opt.hidden && opt.querySelector('input').checked });
       };
       const cancel = (buttons.find((b) => b.id === 'cancel') || buttons[0]).id;
-      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(cancel); } };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (!busy) done(cancel); } };
       askEl.addEventListener('keydown', onKey);
       let focus = null;
       for (const b of buttons) {
@@ -781,6 +802,39 @@
 
   const fromBase64 = (data) => Uint8Array.from(atob(data), (ch) => ch.charCodeAt(0));
 
+  /* ---------- готовая копия: предпросмотр и отпечаток ---------- */
+
+  /* Копия собирается один раз: и для предпросмотра, и для отправки. Страница предпросмотра (вкладка
+     расширения) забирает её отсюда через фоновый скрипт, сайту она недоступна. */
+  const previews = new Map();
+  const PREVIEW_KEEP = 4;
+
+  async function fingerprint(bytes) {
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    return Array.from(h, (x) => x.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function openPreview(copy, source, summary) {
+    const id = crypto.randomUUID();
+    previews.set(id, {
+      name: copy.name, type: copy.type, bytes: copy.bytes, text: copy.text, sha256: copy.sha256, same: copy.same,
+      source, host: location.host, count: summary.count, byType: summary.byType || {},
+    });
+    while (previews.size > PREVIEW_KEEP) previews.delete(previews.keys().next().value);
+    const r = await send({ type: 'openPreview', id });
+    if (!r || r.error) throw new Error((r && r.error) || tr('err.noReply'));
+  }
+
+  chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+    if (!msg || msg.type !== 'previewGet' || sender.id !== chrome.runtime.id || sender.tab) return false;
+    /* Сообщение приходит во все фреймы вкладки: отвечает только тот, где копия лежит. */
+    const p = previews.get(msg.id);
+    if (p) reply({ ...p, bytes: undefined, size: p.bytes.length, data: toBase64(p.bytes) });
+    return false;
+  });
+
+  const logCopy = (c) => ({ name: c.name, bytes: c.bytes.length, sha256: c.sha256 });
+
   /* PDF и Office: текст достаёт offscreen-документ расширения. Если в тексте есть данные,
      пользователь выбирает: копия с метками в том же формате, оригинал или отмена. Длинный PDF
      (больше PDF_COPY_PAGES страниц) и документ, который не удалось собрать, уходят текстом. */
@@ -813,7 +867,22 @@
     const sameName = office ? f.name.replace(/\.(doc|xls|ppt)m$/i, (x, k) => '.' + k + 'x') : f.name;
     const copyName = f.name + '.txt';
     const noOriginal = policy.allowOriginalFiles === false;
+    /* Копия того же формата, а если собрать её не вышло или PDF длинный, текст с метками. */
+    let built = null;
+    const build = () => built || (built = (async () => {
+      let copy = null;
+      if (same) {
+        if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 600000);
+        const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
+        if (pdfSame) toastEl.hidden = true;
+        if (c && !c.error && c.data) copy = { same: true, name: c.name, type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, bytes: fromBase64(c.data), text: c.text || '' };
+      }
+      copy = copy || { same: false, name: copyName, type: 'text/plain', bytes: new TextEncoder().encode(m.texts[0]), text: m.texts[0] };
+      copy.sha256 = await fingerprint(copy.bytes);
+      return copy;
+    })());
     const choice = await ask({
+      more: { label: tr('file.preview'), busy: tr('file.previewBusy'), run: async () => openPreview(await build(), f.name, m.summary) },
       title: tr('file.doc.title', { name: f.name }),
       text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName })
         : pdfSame ? tr('file.doc.foundPdf', { n: m.summary.count, types, copy: sameName })
@@ -829,23 +898,12 @@
     });
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
-    if (same) {
-      if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 600000);
-      const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
-      if (pdfSame) toastEl.hidden = true;
-      if (c && !c.error && c.data) {
-        const file = new File([fromBase64(c.data)], c.name, { type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, lastModified: f.lastModified });
-        checkedFiles.add(sigOf(file));
-        send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.sameFormat', { copy: c.name }) } }).catch(() => {});
-        toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.sameFormat', { copy: c.name }), 7000);
-        return file;
-      }
-    }
-    const file = new File([m.texts[0]], copyName, { type: 'text/plain', lastModified: f.lastModified });
+    const c = await build();
+    const file = new File([c.bytes], c.name, { type: c.type, lastModified: f.lastModified });
     checkedFiles.add(sigOf(file));
-    const how = tr(same ? 'file.sameFailed' : 'file.converted', { copy: copyName });
-    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how } }).catch(() => {});
-    toast(same ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
+    const how = c.same ? tr('file.sameFormat', { copy: c.name }) : tr(same ? 'file.sameFailed' : 'file.converted', { copy: c.name });
+    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how, copy: logCopy(c) } }).catch(() => {});
+    toast(same && !c.same ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
     return file;
   }
 
@@ -885,7 +943,27 @@
     }
     const types = typesText(m.summary);
     const noOriginal = policy.allowOriginalFiles === false;
+    /* Копии в другом формате у картинки нет: null значит, что закрыть данные не вышло. */
+    let built = null;
+    const build = () => built || (built = (async () => {
+      toast('ok', tr('file.covering', { name: f.name }), 20000);
+      const c = await send({ type: 'cleanDoc', name: f.name, data, values: m.values || [] }).catch((e) => ({ error: String(e) }));
+      toastEl.hidden = true;
+      if (!c || c.error || !c.data) return null;
+      const copy = { same: true, name: c.name, type: c.type || f.type, bytes: fromBase64(c.data), text: c.text || '' };
+      copy.sha256 = await fingerprint(copy.bytes);
+      return copy;
+    })());
+    const failed = () => {
+      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.failed', { name: f.name }) } }).catch(() => {});
+      toast('warn', tr('file.img.failed', { name: f.name }), 9000);
+      return null;
+    };
     const choice = await ask({
+      more: {
+        label: tr('file.preview'), busy: tr('file.previewBusy'),
+        run: async () => { const c = await build(); if (c) await openPreview(c, f.name, m.summary); else toast('warn', tr('file.img.failed', { name: f.name }), 9000); },
+      },
       title: tr('file.doc.title', { name: f.name }),
       text: tr('file.img.found', { n: m.summary.count, types }),
       note: [tr('file.img.note'), unnamed ? tr('file.doc.names') : '', noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
@@ -897,17 +975,11 @@
     });
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
-    toast('ok', tr('file.covering', { name: f.name }), 20000);
-    const c = await send({ type: 'cleanDoc', name: f.name, data, values: m.values || [] }).catch((e) => ({ error: String(e) }));
-    toastEl.hidden = true;
-    if (!c || c.error || !c.data) {
-      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.failed', { name: f.name }) } }).catch(() => {});
-      toast('warn', tr('file.img.failed', { name: f.name }), 9000);
-      return null;
-    }
-    const file = new File([fromBase64(c.data)], c.name, { type: c.type || f.type, lastModified: f.lastModified });
+    const c = await build();
+    if (!c) return failed();
+    const file = new File([c.bytes], c.name, { type: c.type, lastModified: f.lastModified });
     checkedFiles.add(sigOf(file));
-    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.sent') } }).catch(() => {});
+    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: tr('file.img.sent'), copy: logCopy(c) } }).catch(() => {});
     toast('ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + tr('file.img.sent'), 7000);
     return file;
   }

@@ -149,7 +149,8 @@ try {
     for (let i = 0; i < 80; i++) { const d = await dialog(); if (d) return d; await sleep(150); }
     throw new Error('окно Velami не появилось');
   }
-  const buttons = (d) => findAll(d, (n) => n.nodeName === 'BUTTON').map((b) => textOf(b).trim());
+  /* Только видимые кнопки: скрытая ссылка предпросмотра в счёт не идёт. */
+  const buttons = (d) => findAll(d, (n) => n.nodeName === 'BUTTON' && !(n.attributes || []).includes('hidden')).map((b) => textOf(b).trim());
   async function press(label) {
     const d = await waitDialog();
     const btn = find(d, (n) => n.nodeName === 'BUTTON' && textOf(n).trim() === label);
@@ -176,7 +177,7 @@ try {
   await waitUpload('estratto.pdf', 600);
   const copyOk = await isVelamiPdf('estratto.pdf');
   check('PDF с данными: кнопки «оригинал» нет, есть пояснение, уходит только чистая копия PDF', () => {
-    assert.deepEqual(pdfButtons, ['Annulla', 'Invia copia pulita']);
+    assert.deepEqual(pdfButtons, ['Guarda la copia prima di inviarla', 'Annulla', 'Invia copia pulita']);
     assert.match(pdfText, /solo la copia pulita/);
     assert.ok(copyOk, 'ушёл не очищенный PDF');
   });
@@ -188,7 +189,7 @@ try {
   await waitUpload('scansione.pdf', 600);
   const scanOk = await isVelamiPdf('scansione.pdf');
   check('скан: текст прочитан OCR, оригинал запрещён, уходит только чистая копия PDF', () => {
-    assert.deepEqual(scanButtons, ['Annulla', 'Invia copia pulita']);
+    assert.deepEqual(scanButtons, ['Guarda la copia prima di inviarla', 'Annulla', 'Invia copia pulita']);
     assert.ok(scanOk, 'ушёл не очищенный PDF');
   });
 
@@ -240,7 +241,7 @@ try {
   await pick('richiesta.docx');
   const docButtons = buttons(await waitDialog());
   await press('Cancel');
-  check('без политики кнопка оригинала вернулась', () => assert.deepEqual(docButtons, ['Cancel', 'Send original', 'Send clean copy']));
+  check('без политики кнопка оригинала вернулась', () => assert.deepEqual(docButtons, ['See the copy before sending', 'Cancel', 'Send original', 'Send clean copy']));
 
   console.log(`\nВсе проверки пройдены: ${results.length}`);
 } catch (err) {

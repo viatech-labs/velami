@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { crc32 } from 'node:zlib';
 
-export const PACKAGE_ROOTS = ['manifest.json', 'popup.html', 'dashboard.html', 'offscreen.html', 'managed-schema.json', 'src', 'ui', 'icons', '_locales', 'vendor', 'models'];
+export const PACKAGE_ROOTS = ['manifest.json', 'popup.html', 'dashboard.html', 'offscreen.html', 'preview.html', 'managed-schema.json', 'src', 'ui', 'icons', '_locales', 'vendor', 'models'];
 
 /** Модель и onnxruntime не хранятся в git: их собирают npm run model и npm run setup. */
 export function checkGenerated(root) {

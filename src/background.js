@@ -9,7 +9,7 @@ const OPTIONAL_SITES = SITES.SITES.filter((x) => x.optional);
 const LANGUAGES = ['auto', 'en', 'it', 'ru'];
 const LOG_LIMIT = 300;
 const BODY_LIMIT = 20000;
-const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'cleanDoc', 'setImagesAsk']);
+const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'cleanDoc', 'setImagesAsk', 'openPreview']);
 const MAX_EXTRACT = 30 * 1024 * 1024;
 
 let state = null;
@@ -296,7 +296,7 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
   return file ? { texts: out, summary, values: [...values.values()] } : { texts: out, summary };
 }
 
-const LOG_FIELDS = ['kind', 'channel', 'host', 'path', 'method', 'file', 'summary', 'texts', 'body', 'reason', 'note', 'types', 'requests'];
+const LOG_FIELDS = ['kind', 'channel', 'host', 'path', 'method', 'file', 'summary', 'texts', 'body', 'reason', 'note', 'types', 'requests', 'copy'];
 const KIND_STAT = { sent: 'requests', file: 'files', blocked: 'blocked', leak: 'leaks', unchecked: 'unchecked', coverage: 'coverage', dropped: 'dropped' };
 
 async function addLog(entry, sender) {
@@ -304,6 +304,13 @@ async function addLog(entry, sender) {
   for (const k of LOG_FIELDS) if (entry && entry[k] !== undefined) e[k] = entry[k];
   if (!KIND_STAT[e.kind]) return { ok: false };
   if (e.requests !== undefined) e.requests = Array.isArray(e.requests) ? e.requests.filter((r) => typeof r === 'string').slice(0, 15).map((r) => r.slice(0, 200)) : undefined;
+  /* Файл, который получил сайт: имя, размер и отпечаток, чтобы его можно было сверить. */
+  if (e.copy !== undefined) {
+    const c = e.copy || {};
+    e.copy = typeof c.name === 'string' && Number.isSafeInteger(c.bytes) && c.bytes >= 0 && /^[0-9a-f]{64}$/.test(c.sha256)
+      ? { name: c.name.slice(0, 200), bytes: c.bytes, sha256: c.sha256 } : undefined;
+    if (!e.copy) delete e.copy;
+  }
   try { e.site = new URL(sender.tab.url).host; } catch { /* ignore */ }
   if (typeof e.body === 'string') {
     e.bodyBytes = new TextEncoder().encode(e.body).length;
@@ -452,6 +459,17 @@ async function handle(msg, sender) {
     case 'extractFile': return extractFile(msg);
     case 'cleanDoc': return cleanDocFile(msg);
     case 'setImagesAsk': return setSettings({ askImages: !!msg.ask });
+    /* Предпросмотр копии: сама копия остаётся во вкладке чата, страница предпросмотра забирает её оттуда. */
+    case 'openPreview': {
+      if (fromExtensionPage || !sender.tab || !/^[0-9a-f-]{36}$/.test(String(msg.id))) return { error: 'forbidden' };
+      await chrome.tabs.create({ url: chrome.runtime.getURL(`preview.html#tab=${sender.tab.id}&id=${msg.id}`), index: sender.tab.index + 1, openerTabId: sender.tab.id });
+      return { ok: true };
+    }
+    case 'previewGet': {
+      const tab = Number(msg.tab);
+      if (!Number.isInteger(tab) || !/^[0-9a-f-]{36}$/.test(String(msg.id))) return { error: 'forbidden' };
+      return chrome.tabs.sendMessage(tab, { type: 'previewGet', id: msg.id }).catch(() => ({ error: 'gone' }));
+    }
     case 'open':
       await chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html#' + (msg.page || 'log')) });
       return { ok: true };

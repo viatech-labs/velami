@@ -57,7 +57,8 @@ PDF up to 30 pages goes out as a PDF with the same pages, the data covered by la
 with labels, longer PDF as a clean text copy. On images (PNG, JPEG, WebP, GIF, BMP), and on images inside Office
 documents, Velami reads the text on the device (Tesseract, Italian, English, Russian), covers the
 data with labels and removes location and camera data. Files Velami cannot read are held back until
-you decide.
+you decide. Before sending you can open the clean copy in a Velami tab and see exactly what the site
+gets, and the log keeps the name, size and SHA-256 of every copy that was sent.
 
 ## You can check it yourself
 
@@ -129,6 +130,7 @@ browser extension can stop that. The welcome page says so.
 | `src/office.js` | offscreen document, Node | Word, Excel, PowerPoint text, zip reader with limits |
 | `src/image.js` | offscreen document, Node | OCR layout, boxes for found values, metadata removal |
 | `src/pdf.js` | offscreen document, Node | PDF text geometry, text layer with labels, PDF writer |
+| `preview.html`, `ui/preview.js` | extension tab | the clean copy before it is sent: pages, text, size, SHA-256 |
 | `src/policy.js` | service worker, Node | organization policy from `chrome.storage.managed` |
 | `src/sites.js`, `src/proto.js` | everywhere | supported sites, Gemini protobuf |
 | `scripts/` | Node | reproducible zip and verification |

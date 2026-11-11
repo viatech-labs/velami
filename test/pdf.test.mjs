@@ -87,6 +87,11 @@ test('собранный PDF: страницы картинками, текст 
   const meta = await doc.getMetadata();
   assert.equal(meta.metadata, null);
   await doc.cleanup();
+  /* Предпросмотр достаёт картинки страниц прямо из байтов: те же JPEG, по одной на страницу. */
+  const images = Pdf.pageImages(out);
+  assert.equal(images.length, 2);
+  assert.ok(images.every((b) => Buffer.from(b).equals(jpeg)));
+  assert.deepEqual(Pdf.pageImages(readFileSync(path.join(files, 'estratto.pdf'))), []);
 });
 
 test('картинки на странице: место по матрицам, полосы скана склеиваются, мелочь отбрасывается', async () => {

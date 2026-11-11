@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { crc32, inflateRawSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -190,6 +191,34 @@ try {
     return b && { type: b.type, bytes: new Uint8Array(Buffer.from(b.data, 'base64')) };
   };
 
+  /* Предпросмотр: «Guarda la copia» открывает вкладку расширения с копией, окно выбора остаётся открытым. */
+  const sha = (bytes) => createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+  async function preview(shotName) {
+    const opened = browser.waitForTarget((t) => t.url().includes('/preview.html#'), { timeout: 120000 });
+    await press('Guarda la copia prima di inviarla');
+    const tab = await (await opened).page();
+    await tab.waitForSelector('#facts:not([hidden]), #gone:not([hidden])', { timeout: 30000 });
+    await sleep(300);
+    const seen = await tab.evaluate(() => ({
+      gone: !document.getElementById('gone').hidden,
+      title: document.getElementById('title').textContent,
+      lead: document.getElementById('lead').textContent,
+      name: document.getElementById('f-name').textContent,
+      hash: document.getElementById('f-hash').textContent,
+      found: document.getElementById('f-found').textContent,
+      note: document.getElementById('note').textContent,
+      sheets: [...document.querySelectorAll('#sheets canvas')].map((c) => [c.width, c.height]),
+      text: document.getElementById('body').textContent,
+      labels: document.querySelectorAll('#body .tok').length,
+      all: document.body.innerText,
+    }));
+    await tab.screenshot({ path: path.join(out, shotName) });
+    await tab.click('#back');
+    for (let i = 0; i < 40 && !tab.isClosed(); i++) await sleep(100);
+    seen.closed = tab.isClosed();
+    return seen;
+  }
+
   /* PDF с текстом: тот же PDF, места закрыты, текстовый слой с метками. */
   await pick('estratto.pdf');
   const askText = textOf(await waitDialog());
@@ -199,9 +228,23 @@ try {
     assert.match(askText, /copia pulita «estratto\.pdf»: le stesse pagine/);
   });
   assert.deepEqual(await got(), []);
+  const pdfPreview = await preview('pdf-preview.png');
+  const afterPreview = await got();
   await press('Invia copia pulita');
   const pdfSent = await sent('estratto.pdf', 600);
   assert.ok(pdfSent, 'копия estratto.pdf не загружена');
+  check('предпросмотр PDF: страницы и текст копии с метками, сайту ничего не передано, ушёл ровно показанный файл', () => {
+    assert.ok(!pdfPreview.gone, 'копия не дошла до предпросмотра');
+    assert.match(pdfPreview.title, /Copia pulita «estratto\.pdf»/);
+    assert.match(pdfPreview.lead, /chatgpt\.com/);
+    assert.equal(pdfPreview.sheets.length, 2);
+    assert.ok(pdfPreview.labels >= 4, 'меток в тексте: ' + pdfPreview.labels);
+    assert.ok(!LEFT.test(pdfPreview.all), 'в предпросмотре значение: ' + (pdfPreview.all.match(LEFT) || [])[0]);
+    assert.deepEqual(afterPreview, []);
+    assert.ok(pdfPreview.closed, 'вкладка предпросмотра не закрылась');
+    assert.match(pdfPreview.hash, /^[0-9a-f]{64}$/);
+    assert.equal(pdfPreview.hash, sha(pdfSent.bytes));
+  });
   writeFileSync(path.join(out, 'estratto-sent.pdf'), pdfSent.bytes);
   const pdfCopy = await pdfLayers(pdfSent.bytes);
   const pdfSeen = await ocrText(pdfCopy.images[0]);
@@ -253,10 +296,11 @@ try {
   assert.equal(await page.$eval('#file', (i) => i.files.length), 0);
 
   /* Office: чистая копия в том же формате. Проверяются сырые байты каждой части пакета. */
-  async function sameFormat(file, sentName, mime, labels) {
+  async function sameFormat(file, sentName, mime, labels, look = '') {
     await pick(file);
     const text = textOf(await waitDialog());
     assert.match(text, new RegExp('«' + sentName.replace('.', '\\.') + '»: '), text);
+    const shown = look ? await preview(look) : null;
     await press('Invia copia pulita');
     const copy = await sent(sentName);
     assert.ok(copy, 'копия ' + sentName + ' не загружена');
@@ -267,7 +311,7 @@ try {
     assert.deepEqual(left, []);
     const { text: copyText } = await Office.extract(copy.bytes, sentName);
     for (const t of labels) assert.ok(copyText.includes(t), 'нет ' + t + ' в ' + copyText.slice(0, 300));
-    return { parts, copyText };
+    return { parts, copyText, bytes: copy.bytes, shown };
   }
 
   const pres = await sameFormat('presentazione.pptx', 'presentazione.pptx', OFFICE.pptx, ['[[EMAIL_1]]', '[[PERSON_1]]']);
@@ -275,7 +319,13 @@ try {
     assert.match(pres.copyText, /Cliente: \[\[PERSON_1\]\]/);
   });
 
-  const word = await sameFormat('nascosto.docx', 'nascosto.docx', OFFICE.docx, ['[[EMAIL_', '[[IBAN_', '[[CF_', '[[PHONE_']);
+  const word = await sameFormat('nascosto.docx', 'nascosto.docx', OFFICE.docx, ['[[EMAIL_', '[[IBAN_', '[[CF_', '[[PHONE_'], 'word-preview.png');
+  check('предпросмотр Word: текст копии с метками без значений, ушёл ровно показанный файл', () => {
+    assert.equal(word.shown.sheets.length, 0);
+    assert.ok(word.shown.labels >= 4, 'меток в тексте: ' + word.shown.labels);
+    assert.ok(!LEFT.test(word.shown.all), 'в предпросмотре значение: ' + (word.shown.all.match(LEFT) || [])[0]);
+    assert.equal(word.shown.hash, sha(word.bytes));
+  });
   check('Word: тот же .docx, данные скрыты в правках, комментариях, полях, ссылках и метаданных', () => {
     assert.match(word.parts['word/document.xml'].toString(), /w:author="Velami"/);
     assert.match(word.parts['word/comments.xml'].toString(), /\[\[CF_\d+\]\]/);
@@ -354,8 +404,14 @@ try {
   /* Картинка с данными: та же картинка, места закрыты метками. */
   await pick('bonifico.png');
   const shotAsk = textOf(await waitDialog(400));
+  const shotPreview = await preview('image-preview.png');
   await press('Invia copia pulita');
   const shot = await sent('bonifico.png');
+  check('предпросмотр картинки: показана закрытая картинка, ушёл ровно показанный файл', () => {
+    assert.equal(shotPreview.sheets.length, 1);
+    assert.ok(!LEFT.test(shotPreview.all), 'в предпросмотре значение: ' + (shotPreview.all.match(LEFT) || [])[0]);
+    assert.equal(shotPreview.hash, sha(shot.bytes));
+  });
   const shotSeen = await ocrText(shot.bytes);
   writeFileSync(path.join(out, 'bonifico-sent.png'), shot.bytes);
   check('картинка: окно с найденным, уходит та же PNG, на ней метки вместо данных', () => {
@@ -437,6 +493,12 @@ try {
   const pillText = textOf(find(await tree(), (n) => cls(n, 'pill')));
   check('журнал: копии записаны как проверенные, оригиналы по выбору с причиной, тревоги нет', () => {
     assert.ok(log.some((e) => e.kind === 'file' && e.file === 'estratto.pdf' && /stesso formato/.test(e.note || '')));
+    const pdfEntry = log.find((e) => e.kind === 'file' && e.file === 'estratto.pdf');
+    assert.deepEqual(pdfEntry.copy, { name: 'estratto.pdf', bytes: pdfSent.bytes.length, sha256: sha(pdfSent.bytes) });
+    const shotEntry = log.find((e) => e.kind === 'file' && e.file === 'bonifico.png');
+    assert.equal(shotEntry.copy.sha256, sha(shot.bytes));
+    const wordEntry = log.find((e) => e.kind === 'file' && e.file === 'nascosto.docx');
+    assert.equal(wordEntry.copy.sha256, sha(word.bytes));
     assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'richiesta.docx' && /su tua scelta/.test(e.note)));
     assert.ok(log.some((e) => e.kind === 'unchecked' && e.file === 'scheda.tiff'));
     assert.ok(log.some((e) => e.kind === 'file' && e.file === 'bonifico.png' && /stessa immagine/.test(e.note || '')));

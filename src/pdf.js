@@ -242,5 +242,34 @@
     return bytes;
   }
 
-  return { textLayout, maskedRuns, imageRegions, annotationTexts, maskText, write };
+  /* Картинки страниц из PDF, записанного write: по одной JPEG на страницу, в порядке страниц.
+     Чужой PDF так не читается, для него вернётся пустой список. */
+  function pageImages(bytes) {
+    const mark = enc.encode('/Filter /DCTDecode /Length ');
+    const tail = enc.encode(' >>\nstream\n');
+    const out = [];
+    let at = 0;
+    while (at < bytes.length - mark.length) {
+      let hit = -1;
+      for (let i = at; i <= bytes.length - mark.length; i++) {
+        if (bytes[i] !== mark[0]) continue;
+        let k = 1;
+        while (k < mark.length && bytes[i + k] === mark[k]) k++;
+        if (k === mark.length) { hit = i; break; }
+      }
+      if (hit < 0) break;
+      let p = hit + mark.length;
+      let len = 0;
+      let digits = 0;
+      while (bytes[p] >= 0x30 && bytes[p] <= 0x39 && digits < 10) { len = len * 10 + (bytes[p] - 0x30); p++; digits++; }
+      const ok = digits > 0 && tail.every((b, i) => bytes[p + i] === b) && p + tail.length + len <= bytes.length;
+      if (!ok) { at = hit + mark.length; continue; }
+      const start = p + tail.length;
+      out.push(bytes.subarray(start, start + len));
+      at = start + len;
+    }
+    return out;
+  }
+
+  return { textLayout, maskedRuns, imageRegions, annotationTexts, maskText, write, pageImages };
 });
