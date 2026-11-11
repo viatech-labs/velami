@@ -57,8 +57,10 @@ const CASES = {
   'pdf-long': { file: 'relazione-lunga.pdf', press: 'clean', message: 'Chi firma il documento allegato? Rispondi con il nome completo.', secrets: ['Luca Bianchi'], shown: ['Luca Bianchi'] },
   /* Данных в тексте страниц нет: они на вставленной картинке, в поле формы, комментарии, ссылке и свойствах. */
   'pdf-form': { file: 'modulo.pdf', press: 'clean', message: 'Che titolo ha il modulo allegato e quale codice fiscale è scritto nel campo?', secrets: [IT.name, IT.email, IT.iban, IT.cf, 'giulia.bianchi@example.com', 'paolo.neri@example.com', 'Luca Verdi'], shown: [IT.cf] },
-  /* Данные во вложенном в PDF файле. */
-  'pdf-attach': { file: 'allegato.pdf', press: 'clean', message: 'Riassumi il documento allegato in una riga.', secrets: [IT.email, IT.iban] },
+  /* Данные только во вложенном в PDF файле. Вложение в копию не попадает целиком, поэтому меток
+     в трафике нет и быть не должно (labels: false); что копия ушла и что в ней нет значений,
+     проверяется по самому файлу, который получил сайт. */
+  'pdf-attach': { file: 'allegato.pdf', press: 'clean', labels: false, dialog: /allegato\.pdf/, message: 'Riassumi il documento allegato in una riga.', secrets: [IT.email, IT.iban] },
   'pdf-scan': { file: 'scansione.pdf', press: 'clean', message: 'Che cosa c’è scritto nel documento allegato? Riporta il testo.', secrets: [IT.name, IT.email], shown: [IT.email] },
   image: { file: 'bonifico.png', press: 'clean', message: 'Che cosa c’è scritto nell’immagine allegata? Indica beneficiario e importo.', secrets: [IT.name, IT.email, IT.iban, IT.cf], shown: [IT.name] },
   photo: { file: 'chat-ru.jpg', press: 'clean', message: 'Что написано на картинке? Перепиши текст.', secrets: ['maria.petrova@example.com', 'Maria Petrova'], shown: [] },
@@ -437,7 +439,7 @@ async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessa
   if (paywall) return { ok: null, skipped: 'сайт вместо отправки показал оплату тарифа: ' + paywall[0], requests: sent.length, labelsSeen };
   /* Если ушло сообщение или чистая копия, метки обязаны быть в перехваченном трафике.
      Нет меток: скрипт не видел нужный запрос, и «утечки нет» ничего не доказывает. */
-  if ((sentMessage && secrets.length) || c.press === 'clean' || (c.file && !c.press)) {
+  if (c.labels !== false && ((sentMessage && secrets.length) || c.press === 'clean' || (c.file && !c.press))) {
     if (!labelsSeen) problems.push('в перехваченном трафике нет меток: проверка утечек слепая');
   }
   if (alarms.length) {
