@@ -5,12 +5,11 @@
 // без настоящих значений, журнал Velami без тревог, ответ с настоящими значениями и без меток,
 // буфер после кнопки «Копировать» сайта. Итог: test/artifacts/live/report.json и report.md.
 import puppeteer from 'puppeteer';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import os from 'node:os';
 import path from 'node:path';
-import { listFiles } from '../scripts/package-lib.mjs';
+import { QA_PROFILE, EXT_DIR, snapshotExtension, dropWorkerCache, assertFresh } from './qa-ext.mjs';
 
 const require = createRequire(import.meta.url);
 const Sites = require('../src/sites.js');
@@ -23,7 +22,6 @@ const out = path.join(root, 'test', 'artifacts', 'live');
 const files = path.join(root, 'test', 'fixtures', 'files');
 mkdirSync(out, { recursive: true });
 
-const QA_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'velami-qa-chrome');
 const DEFAULT_SITES = ['chatgpt', 'claude', 'perplexity', 'deepseek', 'mistral', 'gemini'];
 const START = { claude: 'https://claude.ai/new' };
 const argOf = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -171,19 +169,10 @@ async function readUpload(u) {
 const squeeze = (s) => String(s).replace(/\s+/g, '').toLowerCase();
 const LABEL_SEEN = /\[\[[A-Z1]{2,}_\d+\]\]|\b[A-Z1]{2,}_\d+\b/;
 
-/* Копия расширения, где необязательные сайты уже разрешены: окно разрешения Chrome
-   в автоматическом браузере не нажать. Путь постоянный, чтобы id и настройки не менялись. */
 const src = process.env.PG_EXT_DIR ? path.resolve(process.env.PG_EXT_DIR) : root;
-const extDir = path.join(os.tmpdir(), 'velami-live-ext');
-rmSync(extDir, { recursive: true, force: true });
-if (process.env.PG_EXT_DIR) cpSync(src, extDir, { recursive: true });
-else for (const f of listFiles(root)) cpSync(path.join(root, f), path.join(extDir, f));
-const manifest = JSON.parse(readFileSync(path.join(extDir, 'manifest.json'), 'utf8'));
-manifest.host_permissions = [...manifest.host_permissions, ...manifest.optional_host_permissions];
-/* Путь копии от запуска к запуску одинаковый, и при той же версии Chrome берёт фоновый скрипт из кэша
-   профиля, а не с диска. Уникальная четвёртая цифра версии заставляет прочитать свежий код. */
-manifest.version = `${manifest.version.split('.').slice(0, 3).join('.')}.${Math.floor(Date.now() / 1000) % 60000}`;
-writeFileSync(path.join(extDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+const extDir = EXT_DIR;
+const manifest = snapshotExtension(root, process.env.PG_EXT_DIR);
+dropWorkerCache();
 
 const browser = await puppeteer.launch({
   headless: false,
@@ -200,7 +189,8 @@ try {
   const admin = await browser.newPage();
   await admin.goto(`chrome-extension://${extId}/dashboard.html#log`);
   const ext = (msg) => admin.evaluate((m) => chrome.runtime.sendMessage(m), msg);
-  if ((await ext({ type: 'cleanDoc' }))?.error === 'unknown message') throw new Error('Chrome запустил устаревший фоновый скрипт');
+  const fresh = await assertFresh(browser);
+  console.log(`Фоновый процесс исполняет код с диска: сверено функций ${fresh.checked} (${fresh.files.join(', ')})`);
   await ext({ type: 'setSettings', patch: { askImages: true, sites: Object.fromEntries(Sites.SITES.filter((s) => s.optional).map((s) => [s.id, sites.includes(s.id)])) } });
   const version = (await ext({ type: 'state' })).version || manifest.version;
   console.log(`Velami ${manifest.version} из ${src}`);
