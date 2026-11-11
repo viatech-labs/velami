@@ -431,7 +431,14 @@
   /* ---------- подстановка настоящих значений в ответы ---------- */
 
   const TOKEN_TEST = new RegExp(PG.TOKEN_SOURCE + '|' + PG.LOOSE_SOURCE);
-  const SKIP = 'textarea, script, style, noscript, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]';
+  /* В поле ввода значения не возвращаются: там пользователь пишет сам. Редактируемый блок внутри
+     ответа (черновик письма в ChatGPT) это текст модели, в нём значения возвращаются как в обычном
+     ответе. Сайт сохраняет такой блок на сервер, и это сохранение проходит через замену, как любой
+     другой запрос страницы. */
+  const NEVER = 'textarea, script, style, noscript';
+  const EDITORS = '[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]';
+  const ANSWER_EDITORS = '[data-testid="chatgpt-writing-block"], [data-client-defined-widget="writing_block"]';
+  const skip = (el) => !!el.closest(NEVER) || (!!el.closest(EDITORS) && !el.closest(ANSWER_EDITORS));
   const restored = new Map();
   const canHighlight = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight !== 'undefined';
   let hlFrame = 0;
@@ -440,7 +447,7 @@
     const v = node.nodeValue;
     if (!v) return;
     const p = node.parentElement;
-    if (!p || p.closest(SKIP) || host.contains(p)) return;
+    if (!p || skip(p) || host.contains(p)) return;
     if (!TOKEN_TEST.test(v)) {
       if (PIECE.test(v)) restoreAcross(p);
       return;
@@ -467,10 +474,10 @@
       if (TOKEN_TEST.test(t)) found = true;
       else el = el.parentElement;
     }
-    if (!found || el.closest(SKIP) || host.contains(el)) return;
+    if (!found || skip(el) || host.contains(el)) return;
     const nodes = [];
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    for (let n; (n = w.nextNode());) if (!n.parentElement.closest(SKIP)) nodes.push(n);
+    for (let n; (n = w.nextNode());) if (!skip(n.parentElement)) nodes.push(n);
     const texts = nodes.map((n) => n.nodeValue);
     const starts = [];
     let all = '';
@@ -609,9 +616,17 @@
 
   /* Сайт попросил записать в буфер текст с метками. Записываем сами, страница получает только «готово».
      Без свежего действия пользователя отказываем: иначе страница могла бы прочитать результат из буфера. */
-  async function copyRestored({ items }) {
+  /* event: сайт сам положил текст в буфер в обработчике события copy и остановил событие, так что
+     onCopy его не увидел. Тогда буфер перезаписывается здесь, сразу после события. */
+  let copyHandledAt = 0;
+  async function copyRestored({ items, event }) {
     if (!enabled || !rehydrateOn) throw new Error('rehydration off');
     if (!navigator.userActivation || !navigator.userActivation.isActive) throw new Error('no user activation');
+    if (event) {
+      if (performance.now() - copyHandledAt < 500) return { ok: true };
+      const known = (Array.isArray(items) ? items : []).some((it) => typeof it['text/plain'] === 'string' && restore(it['text/plain']).spans.length);
+      if (!known) return { ok: true };
+    }
     let n = 0;
     const out = (Array.isArray(items) ? items : []).map((it) => {
       const parts = {};
@@ -647,6 +662,7 @@
       const r = restore(plain);
       dt.setData('text/plain', r.text);
       if (html) dt.setData('text/html', restore(html, true).text);
+      copyHandledAt = performance.now();
       copied(r.spans.length);
       return;
     }
@@ -655,6 +671,7 @@
     const r = restore(text);
     dt.setData('text/plain', r.text);
     e.preventDefault();
+    copyHandledAt = performance.now();
     copied(r.spans.length);
   }
 

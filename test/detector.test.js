@@ -127,6 +127,57 @@ test('известные значения: буквально, в URL-кодир
   assert.equal(json.text, '{"t":"Я [[PERSON_1]], почта [[EMAIL_1]], карта [[CARD_1]]"}');
 });
 
+test('известные значения: экранирование Markdown и HTML, неразрывные пробелы, переносы строк', () => {
+  const typed = 'Я Анна Сергеевна Миронова, почта anna.mironova@example.com, телефон +7 916 123-45-67, фирма Rossi & Figli, '
+    + 'IBAN IT60 X054 2811 1010 0000 0123 456, ключ sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd';
+  const dictionary = [{ term: 'Анна Сергеевна Миронова', type: 'PERSON' }, { term: 'Rossi & Figli', type: 'ORG' }];
+  const candidates = PG.candidatesFrom([typed], { dictionary });
+  const mask = (text) => PG.maskKnown(text, { vault: new PG.Vault(), candidates, commit: true }).text;
+  const clean = (text, ...gone) => {
+    const out = mask(text);
+    for (const g of gone) assert.ok(!out.includes(g), `осталось «${g}»: ${out}`);
+    return out;
+  };
+
+  /* Так сайт сохраняет редактируемый блок ответа: Markdown с обратной чертой перед знаками. */
+  assert.equal(mask('Пишу с anna.mironova\\@example.com.'), 'Пишу с [[EMAIL_1]].');
+  assert.equal(mask('{"content":"почта anna.mironova\\\\@example.com, тел. \\\\+7 916 123\\\\-45\\\\-67"}'), '{"content":"почта [[EMAIL_1]], тел. [[PHONE_1]]"}');
+  clean('ключ sk\\-proj\\-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd', 'AbCdEfGh');
+  clean('anna\\.mironova\\@example\\.com', 'mironova', 'example');
+
+  /* HTML: именованные и числовые сущности, в любом регистре шестнадцатеричных цифр. */
+  for (const amp of ['&amp;', '&#38;', '&#x26;', '&#X26;', '&#038;']) clean(`<p>Rossi ${amp} Figli</p>`, 'Rossi', 'Figli');
+  clean('Anna.Mironova&#64;Example.com', 'Mironova', 'Example');
+  clean('anna.mironova&#x40;example&#46;com', 'mironova', 'example');
+  clean('тел. &#43;7 916 123&#45;45&#45;67', '916', '123');
+
+  /* Пробел между словами значения: неразрывный, сущность, перенос строки, перенос Markdown. */
+  for (const sp of ['\u00a0', '&nbsp;', '&#160;', '&#xa0;', '\n', '\r\n', '\\\n', '  ', '&#x20;']) {
+    clean(`Анна${sp}Сергеевна${sp}Миронова`, 'Анна', 'Миронова');
+    clean(`IT60${sp}X054${sp}2811${sp}1010${sp}0000${sp}0123${sp}456`, 'X054', '2811');
+  }
+
+  /* Границы слов сохраняются и в терпимом режиме: кусок другого слова значением не считается. */
+  const inside = 'xanna.mironova\\@example.community и Rossi &amp; Figlio';
+  assert.equal(mask(inside), inside);
+  /* Сами метки и чужой текст не меняются. */
+  const plain = 'Напиши \\[\\[EMAIL\\_1\\]\\] и [[PERSON_1]] &amp; &nbsp; \\- конец';
+  assert.equal(mask(plain), plain);
+  /* Сторож видит то же самое. */
+  assert.deepEqual(PG.findLeaks('{"c":"anna.mironova\\\\@example.com"}', { candidates }).types, ['EMAIL']);
+  assert.equal(PG.findLeaks('{"c":"anna.mironov\\\\@example.com"}', { candidates }).leak, false);
+});
+
+test('известные значения: большой текст без знаков экранирования проверяется с прежней скоростью', () => {
+  const typed = Array.from({ length: 400 }, (_, i) => `user${i}@example.com`).join(', ');
+  const candidates = PG.candidatesFrom([typed]);
+  const big = 'слово за словом, строка за строкой\n'.repeat(8000);
+  const t = process.hrtime.bigint();
+  assert.equal(PG.findLeaks(big, { candidates }).leak, false);
+  assert.equal(PG.findLeaks(big + 'user7\\@example.com', { candidates }).leak, true);
+  assert.ok(Number(process.hrtime.bigint() - t) / 1e6 < 1500, 'проверка большого текста стала медленной');
+});
+
 test('служебные base64-токены не принимаются за IBAN и карты', () => {
   const token = 'gAAAAABq8X-lLZR41tnIOD_mOYqo5icZntaX5K9nVIsHvXZro4eiJ2mETPYHKHz00VJcwM4XThtaXZSjaTm8DbSvYfiwzLg2JB0k1g7nXWqzThHjdXU8VkX92QdGfTO7WUQA';
   assert.deepEqual(types(token + ' DE89370400440532013000x-' + 'a_4111111111111111 v1.4111111111111111.2'), []);

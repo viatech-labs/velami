@@ -479,11 +479,56 @@
 
   const WORD = /[\p{L}\p{N}]/u;
 
+  /* Известное значение, записанное с экранированием. Редакторы сайтов сохраняют текст как Markdown
+     или HTML: перед знаками появляется «\» (anna\@example.com, sk\-proj\_…), знаки и пробелы
+     становятся сущностями (&amp;, &#64;, &#x20;, &nbsp;), пробел превращается в перевод строки.
+     Буквальный поиск такое значение не видит, и оно ушло бы на сервер сайта нераспознанным. */
+  const PUNCT = /[!-\/:-@[-`{-~]/;
+  const NAMED = { '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": 'apos' };
+  const reEscape = (ch) => ch.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+  const hexAnyCase = (h) => h.replace(/[a-f]/g, (x) => `[${x}${x.toUpperCase()}]`);
+  const SPACE_SOURCE = '(?:[ \\t\\u00a0]|\\r?\\n|\\\\{1,3}\\r?\\n|&nbsp;|&#[xX]0*20;|&#0*32;|&#[xX]0*[aA]0;|&#0*160;)+';
+  const looseCache = new Map();
+  function looseValue(value, caseless) {
+    const key = (caseless ? 'i' : 's') + value;
+    let hit = looseCache.get(key);
+    if (hit !== undefined) return hit;
+    let src = '';
+    let special = false;
+    let space = false;
+    let chunk = '';
+    let longest = '';
+    for (const ch of value) {
+      const sp = /\s/.test(ch);
+      const punct = !sp && PUNCT.test(ch);
+      if (sp || punct) {
+        special = true;
+        if (chunk.length > longest.length) longest = chunk;
+        chunk = '';
+      } else chunk += ch;
+      if (sp) { if (!space) src += SPACE_SOURCE; space = true; continue; }
+      space = false;
+      if (punct) {
+        const cp = ch.codePointAt(0);
+        src += `(?:\\\\{0,3}${reEscape(ch)}|&#[xX]0*${hexAnyCase(cp.toString(16))};|&#0*${cp};${NAMED[ch] ? `|&${NAMED[ch]};` : ''})`;
+      } else src += reEscape(ch);
+    }
+    if (chunk.length > longest.length) longest = chunk;
+    /* Без знаков и пробелов экранировать нечего. Кусок из букв и цифр нужен, чтобы быстро
+       отсеять тексты, где значения точно нет. */
+    hit = special && longest.length >= 2 ? { re: new RegExp(src, caseless ? 'gi' : 'g'), probe: caseless ? longest.toLowerCase() : longest } : null;
+    if (looseCache.size > 5000) looseCache.clear();
+    looseCache.set(key, hit);
+    return hit;
+  }
+
   function locate(text, candidates) {
     const found = [];
     const taken = tokenSpans(text);
     const lower = text.toLowerCase();
     const sorted = [...candidates].filter((c) => c.value.length >= 3).sort((a, b) => b.value.length - a.value.length);
+    /* В большом тексте без «\» и «&» экранированных значений нет: там остаётся буквальный поиск. */
+    const mayEscape = text.length < 20000 || /[\\&\u00a0]/.test(text);
     for (const c of sorted) {
       const enc = encodeURIComponent(c.value);
       const variants = [[c.value, false]];
@@ -499,6 +544,17 @@
           taken.push(span);
           found.push({ id: c.id, type: c.type, label: LABELS[c.type], value: c.value, canonical: c.canonical, start: span.start, end: span.end, encoded });
         }
+      }
+      const loose = mayEscape ? looseValue(c.value, caseless) : null;
+      if (!loose || hay.indexOf(loose.probe) < 0) continue;
+      loose.re.lastIndex = 0;
+      for (let m; (m = loose.re.exec(text));) {
+        if (!m[0]) { loose.re.lastIndex++; continue; }
+        const span = { start: m.index, end: m.index + m[0].length };
+        if (WORD.test(text[span.start - 1] || '') || WORD.test(text[span.end] || '')) continue;
+        if (taken.some((t) => overlaps(t, span))) continue;
+        taken.push(span);
+        found.push({ id: c.id, type: c.type, label: LABELS[c.type], value: c.value, canonical: c.canonical, start: span.start, end: span.end, encoded: false });
       }
     }
     return found.sort((a, b) => a.start - b.start);

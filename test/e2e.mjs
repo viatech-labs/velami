@@ -16,7 +16,8 @@ const MOCK_PAGE = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><t
 .answer{background:#f4f4f4;border-radius:12px;padding:12px;white-space:pre-wrap}</style></head><body>
 <h2>ChatGPT (тестовый двойник)</h2><div id="answers"></div>
 <div id="prompt-textarea" contenteditable="true"></div><p><button data-testid="send-button" id="send">Отправить</button>
-<button id="copy-text">Копировать</button><button id="copy-rich">Копировать с форматированием</button>
+<button id="copy-text">Копировать</button><button id="copy-rich">Копировать с форматированием</button><button id="copy-event">Копировать через событие</button>
+<div data-testid="chatgpt-writing-block"><div id="draft" class="ProseMirror" contenteditable="true"></div></div>
 <input type="file" id="file"></p><div id="drop" style="padding:16px;border:2px dashed #aaa">Перетащите файл</div><pre id="file-seen"></pre>
 <script>
 let lastRaw = '';
@@ -26,6 +27,24 @@ document.getElementById('copy-rich').onclick = () => navigator.clipboard.write([
   'text/plain': new Blob([lastRaw], { type: 'text/plain' }),
   'text/html': new Blob(['<p><b>Ответ:</b> ' + lastRaw + '</p>'], { type: 'text/html' }),
 })]).then(() => { copyResult = 'ok'; }, (e) => { copyResult = String(e); });
+/* Как сейчас у ChatGPT: текст кладётся в буфер в обработчике события copy, событие останавливается. */
+let copyViaEvent = false;
+document.addEventListener('copy', (e) => {
+  if (!copyViaEvent) return;
+  e.clipboardData.setData('text/plain', lastRaw);
+  e.clipboardData.setData('text/html', '<p><b>Ответ:</b> ' + lastRaw + '</p>');
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+document.getElementById('copy-event').onclick = () => { copyViaEvent = true; copyResult = document.execCommand('copy') ? 'ok' : 'failed'; copyViaEvent = false; };
+/* Редактируемый блок ответа: сайт сохраняет его на сервер в Markdown при каждом изменении текста. */
+const draft = document.getElementById('draft');
+let saveTimer = 0;
+new MutationObserver(() => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => fetch('/backend-api/conversation/message/writing-blocks', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ writing_block: { content: draft.innerText.replace(/[@_*-]/g, '\\\\$&') + '&#x20;' } }) }).catch(() => {}), 150);
+}).observe(draft, { subtree: true, childList: true, characterData: true });
 document.getElementById('file').onchange = async (e) => {
   const f = e.target.files[0];
   window.__fileText = await f.text();
@@ -92,7 +111,7 @@ try {
 
   const page = await browser.newPage();
   await scheme(page, 'light');
-  const captured = { conversation: null, form: null, analytics: null, beacon: null, upload: null, drop: null };
+  const captured = { conversation: null, form: null, analytics: null, beacon: null, upload: null, drop: null, block: [] };
   await browser.defaultBrowserContext().overridePermissions('https://chatgpt.com', ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
   await page.setRequestInterception(true);
   page.on('request', async (req) => {
@@ -115,6 +134,10 @@ try {
       captured.form = req.postData();
       const prompt = new URLSearchParams(captured.form).get('prompt');
       return req.respond({ status: 200, contentType: 'text/plain; charset=utf-8', body: 'Модель получила: ' + prompt });
+    }
+    if (url === 'https://chatgpt.com/backend-api/conversation/message/writing-blocks') {
+      captured.block.push(req.postData());
+      return req.respond({ status: 200, contentType: 'application/json', body: '{}' });
     }
     if (url === 'https://chatgpt.com/ces/v1/t') {
       captured.analytics = req.postData();
@@ -251,6 +274,50 @@ try {
       assert.ok(!/\[\[[A-Z]+_\d+\]\]/.test(s), 'остались метки: ' + s);
     }
     assert.ok(copyRich[2].includes('<b>'), 'потеряно форматирование');
+  });
+
+  await page.evaluate(() => { copyResult = ''; });
+  await page.click('#copy-event');
+  await page.waitForFunction(() => copyResult !== '', { timeout: 5000 });
+  await sleep(500);
+  const copyEventToast = await shadowTexts();
+  const copyEvent = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read();
+    return [copyResult, await (await item.getType('text/plain')).text(), await (await item.getType('text/html')).text()];
+  });
+  check('копирование через событие copy, которое сайт останавливает: в буфере настоящие значения', () => {
+    assert.equal(copyEvent[0], 'ok');
+    for (const s of [copyEvent[1], copyEvent[2]]) {
+      for (const v of ['maria.petrova@example.com', '4111 1111 1111 1111', 'Мария Петрова']) assert.ok(s.includes(v), 'нет в буфере: ' + v + ' в ' + s);
+      assert.ok(!/\[\[[A-Z]+_\d+\]\]/.test(s), 'остались метки: ' + s);
+    }
+    assert.ok(copyEvent[2].includes('<b>'), 'потеряно форматирование');
+    assert.ok(copyEventToast.includes('Скопировано с настоящими значениями: 5'), 'нет сообщения о копировании');
+  });
+
+  /* Редактируемый блок ответа (черновик письма в ChatGPT): значения возвращаются и в нём, а его
+     сохранение на сервер уходит с метками, хотя сайт экранирует знаки как в Markdown. */
+  const draftSeen = await page.evaluate(async () => {
+    const d = document.getElementById('draft');
+    d.innerHTML = '<p>Gentile <span>[</span><span class="oai-writing-block-placeholder">[PERSON_1]</span><span>]</span>,</p><p>scrivo da [[EMAIL_1]], carta [[CARD_1]].</p>';
+    const ed = document.getElementById('prompt-textarea');
+    ed.textContent = 'черновик с [[EMAIL_1]]';
+    await new Promise((r) => setTimeout(r, 900));
+    const r = { draft: d.innerText, composer: ed.textContent };
+    ed.textContent = '';
+    return r;
+  });
+  check('редактируемый блок ответа: значения подставлены, поле ввода не тронуто', () => {
+    assert.match(draftSeen.draft, /Gentile Мария Петрова,/);
+    assert.match(draftSeen.draft, /scrivo da maria\.petrova@example\.com, carta 4111 1111 1111 1111\./);
+    assert.equal(draftSeen.composer, 'черновик с [[EMAIL_1]]');
+  });
+  check('сохранение блока на сервер: значения с экранированием Markdown заменены метками', () => {
+    assert.ok(captured.block.length > 0, 'сайт не сохранил блок');
+    const last = JSON.parse(captured.block[captured.block.length - 1]).writing_block.content;
+    for (const body of captured.block) for (const v of ['maria.petrova', 'example.com', '4111', 'Петрова']) assert.ok(!body.includes(v), 'в сохранении блока осталось ' + v + ': ' + body);
+    assert.match(last, /Gentile \[\[PERSON_1\]\],/);
+    assert.match(last, /scrivo da \[\[EMAIL_1\]\], carta \[\[CARD_1\]\]\./);
   });
 
   const FILE_TEXT = 'имя;почта;iban\nМария Петрова;maria.petrova@example.com;IT60 X054 2811 1010 0000 0123 456\nключ sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd\n';

@@ -460,6 +460,34 @@
     return tokens ? out : null;
   }
 
+  /* Сайт может класть текст в буфер сам, в обработчике события copy (document.execCommand('copy')
+     или Ctrl+C), и останавливать событие: до расширения оно тогда не доходит. Здесь запоминается,
+     что сайт записал, и сразу после события тот же текст с метками уходит расширению, которое
+     перезаписывает буфер настоящими значениями. Страница их не получает. */
+  const origSetData = window.DataTransfer ? DataTransfer.prototype.setData : null;
+  let copying = null;
+  if (origSetData) {
+    DataTransfer.prototype.setData = function (format, data) {
+      if (copying && copying.data === this) {
+        const type = String(format).toLowerCase();
+        const key = type === 'text' ? 'text/plain' : type;
+        if (key === 'text/plain' || key === 'text/html') copying.items[key] = String(data);
+      }
+      return Reflect.apply(origSetData, this, arguments);
+    };
+    window.addEventListener('copy', (e) => {
+      if (!port || !e.clipboardData) return;
+      const job = { data: e.clipboardData, items: {} };
+      copying = job;
+      setTimeout(() => {
+        if (copying === job) copying = null;
+        const plain = job.items['text/plain'];
+        if (typeof plain !== 'string' || !HAS_TOKEN.test(plain)) return;
+        rpc('copy', { items: [job.items], event: true }, 3000).catch(() => { /* в буфере остаётся текст сайта с метками */ });
+      }, 0);
+    }, true);
+  }
+
   if (origWriteText) {
     clip.writeText = function (data) {
       const text = String(data);
