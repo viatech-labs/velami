@@ -1,4 +1,8 @@
-Copyright 2020 The Jost Project Authors (https://github.com/indestructible-type)
+Onest (onest-*.woff2, from @fontsource-variable/onest 5.3.1):
+Copyright 2021 The Onest Project Authors (https://github.com/googlefonts/onest)
+
+IBM Plex Mono (the build copies it from @fontsource/ibm-plex-mono, same license, full text in that package):
+Copyright 2017 IBM Corp. All rights reserved.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

@@ -1,5 +1,6 @@
 // Тексты velami.pro. Язык выбирает nginx по Accept-Language, переключателя на странице нет.
 // Правило для текстов: без длинных тире и точек с запятой, короткие живые фразы.
+// В подписях к цифрам (stats) сборка подставляет числа из кода: {types} видов меток, {sites} сайтов, из них {on} сразу и {opt} по выбору.
 export const REPO = 'https://github.com/viatech-labs/velami';
 export const DOWNLOAD = 'https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn';
 export const MAIL = 'support@velami.pro';
@@ -13,7 +14,6 @@ export const CONTENT = {
     hero: {
       lines: ['Names', 'Card numbers', 'Passwords'],
       sub: 'stay with you. The AI only gets labels.',
-      eyebrow: 'Chrome extension · free and open source',
       title: 'The AI gets your question.<br><em>Not your data.</em>',
       lead: 'Velami hides names, card numbers, IBANs and passwords before your message reaches ChatGPT, Claude, Gemini or Perplexity. The answer comes back with the real values. Everything happens on your computer.',
       cta: 'Download for Chrome',
@@ -50,7 +50,6 @@ export const CONTENT = {
         ['Velami swaps the data', 'Before the message leaves, personal data turns into labels like [[EMAIL_1]]. The real values stay in your browser.'],
         ['Read the real answer', 'The AI replies with labels. Velami puts your data back, on your screen only. Copying gives you the real text too.'],
       ],
-      alt: 'An AI answer with the real values restored',
     },
     types: {
       title: 'What it hides',
@@ -111,6 +110,11 @@ export const CONTENT = {
       clean: 'This site has no cookies and no trackers.',
     },
     privacy: { title: 'Privacy policy', back: 'Back to Velami' },
+    skip: 'Skip to content',
+    works: 'Works in',
+    stats: [['0', 'servers and accounts of our own'], ['{types}', 'kinds of data it recognises'], ['< 0.5 s', 'to check a short message'], ['{sites}', 'AI chats, {on} right away and {opt} in settings']],
+    tags: { who: 'Use cases', hides: 'Data types', teams: 'For admins', faq: 'FAQ' },
+    logTitle: 'Velami · log',
   },
 
   it: {
@@ -121,7 +125,6 @@ export const CONTENT = {
     hero: {
       lines: ['Nomi', 'Numeri di carta', 'Password'],
       sub: 'restano con te. All’IA arrivano solo etichette.',
-      eyebrow: 'Estensione per Chrome · gratuita e open source',
       title: 'L’IA riceve la domanda.<br><em>Non i tuoi dati.</em>',
       lead: 'Velami nasconde nomi, numeri di carta, IBAN e password prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity. La risposta torna con i valori reali. Tutto succede sul tuo computer.',
       cta: 'Scarica per Chrome',
@@ -158,7 +161,6 @@ export const CONTENT = {
         ['Velami sostituisce i dati', 'Prima dell’invio i dati personali diventano etichette come [[EMAIL_1]]. I valori reali restano nel tuo browser.'],
         ['Leggi la risposta vera', 'L’IA risponde con le etichette. Velami rimette i tuoi dati, solo sul tuo schermo. Anche quando copi ottieni il testo reale.'],
       ],
-      alt: 'Una risposta dell’IA con i valori reali',
     },
     types: {
       title: 'Cosa nasconde',
@@ -219,6 +221,11 @@ export const CONTENT = {
       clean: 'Questo sito non usa cookie né tracker.',
     },
     privacy: { title: 'Informativa privacy', back: 'Torna a Velami' },
+    skip: 'Vai al contenuto',
+    works: 'Funziona su',
+    stats: [['0', 'server e account nostri'], ['{types}', 'tipi di dati riconosciuti'], ['< 0,5 s', 'per controllare un messaggio breve'], ['{sites}', 'chat IA, {on} subito e {opt} nelle impostazioni']],
+    tags: { who: 'Casi d’uso', hides: 'Tipi di dati', teams: 'Per gli amministratori', faq: 'FAQ' },
+    logTitle: 'Velami · registro',
   },
 
   ru: {
@@ -229,7 +236,6 @@ export const CONTENT = {
     hero: {
       lines: ['Имена', 'Номера карт', 'Пароли'],
       sub: 'остаются у вас. ИИ получает только метки.',
-      eyebrow: 'Расширение для Chrome · бесплатно, открытый код',
       title: 'ИИ получает вопрос.<br><em>Но не ваши данные.</em>',
       lead: 'Velami скрывает имена, номера карт, IBAN и пароли до того, как сообщение уйдёт в ChatGPT, Claude, Gemini или Perplexity. Ответ возвращается с настоящими значениями. Всё происходит на вашем компьютере.',
       cta: 'Скачать для Chrome',
@@ -266,7 +272,6 @@ export const CONTENT = {
         ['Velami подменяет данные', 'Перед отправкой личные данные превращаются в метки вроде [[EMAIL_1]]. Настоящие значения остаются в браузере.'],
         ['Читайте настоящий ответ', 'ИИ отвечает с метками. Velami возвращает ваши данные, только на вашем экране. При копировании вы тоже получаете настоящий текст.'],
       ],
-      alt: 'Ответ ИИ с настоящими значениями',
     },
     types: {
       title: 'Что скрывает',
@@ -327,6 +332,11 @@ export const CONTENT = {
       clean: 'На этом сайте нет cookies и трекеров.',
     },
     privacy: { title: 'Политика конфиденциальности', back: 'Вернуться к Velami' },
+    skip: 'К содержанию',
+    works: 'Работает в',
+    stats: [['0', 'своих серверов и учётных записей'], ['{types}', 'видов данных распознаётся'], ['< 0,5 с', 'на проверку короткого сообщения'], ['{sites}', 'ИИ-чатов, {on} сразу и {opt} в настройках']],
+    tags: { who: 'Сценарии', hides: 'Типы данных', teams: 'Администраторам', faq: 'FAQ' },
+    logTitle: 'Velami · журнал',
   },
 };
 

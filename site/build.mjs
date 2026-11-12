@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-// Сборка velami.pro в dist/site: index.<lang>.html и privacy.<lang>.html для en/it/ru, стили, WebP-картинки.
+// Сборка velami.pro в dist/site: index.<lang>.html и privacy.<lang>.html для en/it/ru, стили, шрифты, WebP-картинки.
 // Скриншоты снимаются из настоящего расширения (tools/brochure/shots.mjs) в /tmp/shots-<lang> или --shots <dir>.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, copyFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -24,6 +24,16 @@ const PKG_SHA = (existsSync(path.join(ROOT, 'dist', `velami-${VERSION}.zip.sha25
 /* Число файлов в пакете берётся из списка сборки, чтобы пример на сайте совпадал с выпущенной версией. */
 const PKG_LIST = path.join(ROOT, 'dist', `velami-${VERSION}.files.json`);
 const PKG_FILES = existsSync(PKG_LIST) ? Object.keys(JSON.parse(readFileSync(PKG_LIST, 'utf8')).files).length : 0;
+/* Цифры на плитках считаются из кода: сколько видов меток знает детектор и сколько сайтов поддержано. */
+const FACTS = {
+  types: Object.keys(I18N.MESSAGES.en).filter((k) => k.startsWith('type.')).length,
+  sites: SITES.length + OPTIONAL_SITES.length,
+  on: SITES.length,
+  opt: OPTIONAL_SITES.length,
+};
+const fact = (s) => s.replace(/\{(\w+)\}/g, (m, k) => FACTS[k] ?? m);
+/* Форматы сверены с src/content.js (TEXT_EXT, DOC_EXT, OCR_IMAGE). Текстовых расширений там больше, здесь самые частые. */
+const FORMATS = ['.txt', '.csv', '.docx', '.xlsx', '.pptx', '.pdf', '.png', '.jpg'];
 
 const NB = '\u00a0';
 const glue = (s) => {
@@ -32,29 +42,26 @@ const glue = (s) => {
   return r;
 };
 const typo = (v) => v == null ? v : typeof v === 'string' ? glue(v) : Array.isArray(v) ? v.map(typo) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, typo(x)]));
-const T = Object.fromEntries(LANGS.map((l) => [l, { ...typo(CONTENT[l]), title: CONTENT[l].title, description: CONTENT[l].description }]));
+// Подписи к цифрам стоят в узких плитках, поэтому к ним неразрывные пробелы не добавляются.
+const T = Object.fromEntries(LANGS.map((l) => [l, { ...typo(CONTENT[l]), stats: CONTENT[l].stats, title: CONTENT[l].title, description: CONTENT[l].description }]));
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const rich = (s) => esc(s).replace(/\[\[([A-Z_0-9]+)\]\]/g, '<code class="tok">[[$1]]</code>');
+const toks = (x) => esc(x).replace(/\[\[([A-Z_]+_\d+)\]\]/g, '<mark class="tok">[[$1]]</mark>');
 
 const ICONS = {
-  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-  log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-  flask: '<path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M7.5 15h9"/>',
-  code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
-  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M8 7h8M8 11h6"/>',
-  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
-  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-  swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
-  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
-  gh: null,
-  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 13h18"/>',
+  code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
+  building: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9.5 8h.01M14.5 8h.01M9.5 12h.01M14.5 12h.01M10 21v-4h4v4"/>',
 };
+const WHO_ICONS = ['user', 'briefcase', 'code', 'building'];
+const GH = '<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>';
 const icon = (n, cls = 'ic') => n === 'gh'
-  ? `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`
-  : `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+  ? `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true">${GH}</svg>`
+  : `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
 const MARK_SVG = readFileSync(path.join(ROOT, 'brand', 'velami-mark.svg'), 'utf8').replace(/<\?xml[^>]*>/, '');
 let markN = 0;
@@ -62,6 +69,7 @@ const mark = (cls = 'mark') => { const id = 'vg' + ++markN; return MARK_SVG.repl
 
 function head(t, lang, { title, description, canonical, og }) {
   const alt = LANGS.map((l) => `<link rel="alternate" hreflang="${l}" href="${ORIGIN}/${l}/${canonical}">`).join('\n  ');
+  const preload = [...(lang === 'ru' ? ['cyrillic'] : []), 'latin'].map((sub) => `<link rel="preload" href="/fonts/onest-${sub}.woff2" as="font" type="font/woff2" crossorigin>`).join('\n  ');
   return `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -70,7 +78,7 @@ function head(t, lang, { title, description, canonical, og }) {
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}">
   <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#eeeeef">
+  <meta name="theme-color" content="#ffffff">
   <link rel="canonical" href="${ORIGIN}/${lang}/${canonical}">
   ${alt}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}/${canonical}">
@@ -88,7 +96,7 @@ function head(t, lang, { title, description, canonical, og }) {
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   ${og || ''}
-  <link rel="preload" href="/fonts/jost-${lang === 'ru' ? 'cyrillic' : 'latin'}.woff2" as="font" type="font/woff2" crossorigin>
+  ${preload}
   <link rel="stylesheet" href="/style.css?v=${HASH}">
 </head>`;
 }
@@ -108,105 +116,132 @@ function scenes(lang) {
   return [card(sc.you, hot), card(sc.ai, masked, 'scene-ai'), card(sc.back, back, 'scene-back')];
 }
 
+// На главной ссылки меню ведут к якорям той же страницы, на странице политики к главной на том же языке.
 function header(t, lang, home = '') {
-  return `<header class="top">
+  return `<a class="skip" href="#main">${esc(t.skip)}</a>
+<header class="top">
   <div class="wrap top-in">
-    <a class="brand" href="/${home}" aria-label="Velami">${mark()}<span>Velami</span></a>
+    <a class="brand" href="/${lang}/" aria-label="Velami">${mark()}<span>Velami</span></a>
     <nav class="nav" aria-label="Velami">
-      <a href="/#how">${esc(t.nav.how)}</a>
-      <a href="/#check">${esc(t.nav.check)}</a>
-      <a href="/#teams">${esc(t.nav.teams)}</a>
-      <a href="/#faq">${esc(t.nav.faq)}</a>
-      <a class="nav-cta" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
+      <a href="${home}#how">${esc(t.nav.how)}</a>
+      <a href="${home}#check">${esc(t.nav.check)}</a>
+      <a href="${home}#teams">${esc(t.nav.teams)}</a>
+      <a href="${home}#faq">${esc(t.nav.faq)}</a>
     </nav>
+    <a class="btn btn-sm btn-primary top-cta" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
   </div>
 </header>`;
 }
 
-function footer(t, lang) {
+function footer(t, lang, home = '') {
   return `<footer class="foot">
   <div class="wrap foot-in">
-    <a class="foot-brand" href="/">Velami</a>
-    <p class="foot-tag">${esc(t.footer.tagline)}</p>
-    <p class="foot-row"><span>E-mail: <a href="mailto:${MAIL}">${MAIL}</a></span><span><a href="${REPO}">${esc(t.footer.source)}</a></span><span>AGPL-3.0 · v${VERSION}</span></p>
-    <nav class="foot-links">
-      <a href="/">Velami</a>
-      <a href="/#how">${esc(t.nav.how)}</a>
-      <a href="/#check">${esc(t.nav.check)}</a>
-      <a href="/#teams">${esc(t.nav.teams)}</a>
-      <a href="/privacy">${esc(t.footer.privacy)}</a>
+    <div class="foot-brand">
+      <a class="brand" href="/${lang}/">${mark()}<span>Velami</span></a>
+      <p>${esc(t.footer.tagline)}</p>
+    </div>
+    <nav class="foot-links" aria-label="Velami">
+      <a href="${home}#how">${esc(t.nav.how)}</a>
+      <a href="${home}#check">${esc(t.nav.check)}</a>
+      <a href="${home}#teams">${esc(t.nav.teams)}</a>
+      <a href="${home}#faq">${esc(t.nav.faq)}</a>
+      <a href="/${lang}/privacy">${esc(t.footer.privacy)}</a>
+      <a href="${REPO}">${esc(t.footer.source)}</a>
+      <a href="mailto:${MAIL}">${MAIL}</a>
     </nav>
-    <p class="foot-meta">${esc(t.footer.made)} <a href="https://via-tech.org">Via-Tech</a>. ${esc(t.footer.clean)}</p>
+    <p class="foot-meta">${esc(t.footer.made)} <a href="https://via-tech.org">Via-Tech</a> · AGPL-3.0 · v${VERSION} · ${esc(t.footer.clean)}</p>
   </div>
 </footer>`;
 }
 
-function picture(lang, name, alt, { w, h, cls = '', eager = false } = {}) {
-  return `<img class="${cls}" src="/img/${lang}/${name}.webp" alt="${esc(alt)}" width="${w}" height="${h}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`;
+// Размеры картинки берутся из исходного PNG, чтобы место под неё было занято ещё до загрузки.
+function pngSize(file) {
+  const b = readFileSync(file);
+  return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+}
+const SIZES = {};
+function picture(lang, name, alt) {
+  const { w, h } = SIZES[`${lang}/${name}`];
+  return `<img src="/img/${lang}/${name}.webp" alt="${esc(alt)}" width="${w}" height="${h}" loading="lazy" decoding="async">`;
 }
 
-// Первый кадр демо считаем при сборке тем же детектором, чтобы без JS страница выглядела так же.
+// Живое демо на первом экране. Первый кадр считаем при сборке тем же детектором, чтобы без JS страница выглядела так же.
 function demoBlock(t, lang) {
   const labels = Object.fromEntries(Object.entries(I18N.MESSAGES[lang]).filter(([k]) => k.startsWith('type.')).map(([k, v]) => [k.slice(5), v]));
   const sample = CONTENT[lang].demo.sample;
   const r = PG.maskText(sample, { vault: new PG.Vault() });
   const outHtml = esc(r.text).replace(/\[\[([A-Z_]+)_(\d+)\]\]/g, '<mark class="tok">[[$1_$2]]</mark>');
   const chips = r.findings.map((f) => `<li><span>${esc(labels[f.type] || f.type)}</span><code>${esc(f.token)}</code></li>`).join('');
-  return `<div class="demo reveal" id="demo" data-labels="${esc(JSON.stringify(labels))}" data-count="${esc(t.demo.count)}" data-none="${esc(t.demo.none)}">
-        <div class="pane">
-          <div class="pane-h">${esc(t.demo.you)}</div>
-          <label class="sr" for="demo-in">${esc(t.demo.you)}</label>
-          <textarea id="demo-in" spellcheck="false" rows="4">${esc(sample)}</textarea>
+  return `<div class="demo" id="demo" data-labels="${esc(JSON.stringify(labels))}" data-count="${esc(t.demo.count)}" data-none="${esc(t.demo.none)}">
+          <div class="demo-bar"><i></i><i></i><i></i><span>${esc(t.demo.label)}</span></div>
+          <div class="demo-body">
+            <div class="pane pane-in">
+              <div class="pane-h">${esc(t.demo.you)}</div>
+              <label class="sr" for="demo-in">${esc(t.demo.you)}</label>
+              <textarea id="demo-in" spellcheck="false" rows="3">${esc(sample)}</textarea>
+            </div>
+            <div class="pane-link" aria-hidden="true"><span>${mark('mark mark-s')}<b>Velami</b>${icon('down', 'ic ic-link')}</span></div>
+            <div class="pane pane-out">
+              <div class="pane-h">${esc(t.demo.ai)}<span class="count on" id="demo-count">${esc(t.demo.count.replace('{n}', r.findings.length))}</span></div>
+              <div class="out" id="demo-out" aria-live="polite">${outHtml}</div>
+              <ul class="found" id="demo-found">${chips}</ul>
+            </div>
+          </div>
         </div>
-        <div class="pane pane-out">
-          <div class="pane-h">${esc(t.demo.ai)}<span class="count on" id="demo-count">${esc(t.demo.count.replace('{n}', r.findings.length))}</span></div>
-          <div class="out" id="demo-out" aria-live="polite">${outHtml}</div>
-          <ul class="found" id="demo-found">${chips}</ul>
-        </div>
-      </div>
-      <p class="demo-note">${esc(t.demo.note)}</p>`;
+        <p class="demo-note">${esc(t.demo.note)}</p>`;
 }
 
 function index(lang) {
   const t = T[lang];
   const sc = scenes(lang);
-  const steps = t.how.steps.map(([h, p], i) => `
-      <article class="svc reveal">
-        <div class="svc-art">${sc[i]}</div>
-        <div class="svc-text">
-          <p class="svc-n">0${i + 1}</p>
+  const secH = (tag, h, lead) => `<header class="sec-h reveal">
+        <p class="tag">${esc(tag)}</p>
+        <h2>${esc(h)}</h2>${lead ? `\n        <p class="lead">${esc(lead)}</p>` : ''}
+      </header>`;
+  const works = SITES.map((s) => `<li class="site">${esc(s)}</li>`).join('') + OPTIONAL_SITES.map((s) => `<li class="site opt">${esc(s)}</li>`).join('');
+  const stats = t.stats.map(([n, l]) => `<div class="stat"><dt>${esc(fact(n))}</dt><dd>${esc(fact(l))}</dd></div>`).join('');
+  const whos = t.who.cards.map(([h, p, eg], i) => `
+        <article class="cell who who-${i + 1} reveal">
+          <span class="who-ic">${icon(WHO_ICONS[i])}</span>
           <h3>${esc(h)}</h3>
-          <p>${rich(p)}</p>
-        </div>
-      </article>`).join('');
-  const chips = t.types.list.map((x) => `<li>${esc(x)}</li>`).join('');
+          <p>${esc(p)}</p>
+          <p class="who-eg"><span>${esc(t.who.eg)}</span>${esc(eg)}</p>
+        </article>`).join('');
+  const steps = t.how.steps.map(([h, p], i) => `
+        <article class="cell step reveal">
+          <div class="step-art">${sc[i]}</div>
+          <div class="step-text">
+            <p class="step-n">0${i + 1}</p>
+            <h3>${esc(h)}</h3>
+            <p>${rich(p)}</p>
+          </div>
+        </article>`).join('');
   const pr = CONTENT[lang].proof;
-  const toks = (x) => esc(x).replace(/\[\[([A-Z_]+_\d+)\]\]/g, '<mark class="tok">[[$1]]</mark>');
   const logSha = createHash('sha256').update(pr.logText).digest('hex');
-  const shots = [
+  const mocks = [
     `<div class="mock"><p class="mock-h">${esc(pr.panel)}</p><ul class="mock-list">${pr.items.map(([v, k]) => `<li class="${k ? 'on' : 'off'}"><span class="box"></span><span class="v">${esc(v)}</span>${k ? `<mark class="tok">${esc(k)}</mark>` : `<small>${esc(pr.keep)}</small>`}</li>`).join('')}</ul></div>`,
     `<div class="mock"><p class="mock-h">${esc(pr.log)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-sha">SHA-256 ${logSha.slice(0, 24)}…</p></div>`,
     `<div class="mock"><p class="mock-h">${esc(pr.echo)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-ok">✓ ${esc(pr.echoOk)}</p></div>`,
     `<pre class="term"><code><span class="dim">$</span> shasum -a 256 velami-${VERSION}.zip\n${PKG_SHA.slice(0, 40)}…\n<span class="dim">$</span> npm run verify\n<span class="ok">✓ ${PKG_FILES || 224} files match the sources</span></code></pre>`,
   ];
-  const philo = t.check.cards.map(([h, p], i) => `
-        <article class="proof proof-${i + 1} reveal">
-          <div class="proof-img">${shots[i]}</div>
+  const proofs = t.check.cards.map(([h, p], i) => `
+        <article class="cell proof reveal">
+          <div class="proof-art">${mocks[i]}</div>
           <h3>${esc(h)}</h3>
           <p>${esc(p)}</p>
         </article>`).join('');
-  const teams = t.teams.cards.map(([h, p]) => `
-        <li class="quote reveal">
-          <p>${esc(p)}</p>
+  const chips = t.types.list.map((x) => `<li>${esc(x)}</li>`).join('');
+  const teams = t.teams.cards.map(([h, p], i) => `
+        <article class="cell team reveal">
+          <p class="step-n">0${i + 1}</p>
           <h3>${esc(h)}</h3>
-        </li>`).join('');
+          <p>${esc(p)}</p>
+        </article>`).join('');
   const faq = t.faq.items.map(([q, a]) => `
         <details>
           <summary>${esc(q)}</summary>
           <p>${esc(a)}</p>
         </details>`).join('');
-  const sites = SITES.map((s) => `<li>${esc(s)}</li>`).join('') +
-    OPTIONAL_SITES.map((s) => `<li class="opt">${esc(s)}<small>${esc(t.sites.optional)}</small></li>`).join('');
   const ld = {
     '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Velami',
     applicationCategory: 'BrowserApplication', operatingSystem: 'Chrome', softwareVersion: VERSION,
@@ -218,114 +253,115 @@ function index(lang) {
   return `${head(t, lang, { title: t.title, description: t.description, canonical: '', og: `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` })}
 <body>
 ${header(t, lang)}
-<main>
+<main id="main">
   <section class="hero">
-    <img class="hero-photo" src="/img/photo-hero.webp" alt="" width="2048" height="1152" fetchpriority="high" decoding="async">
     <div class="wrap hero-in">
-      <h1>${t.hero.title}</h1>
-      <p class="hero-sub">${esc(t.hero.lead)}</p>
-      <div class="ctas">
-        <a class="btn btn-light" href="${DOWNLOAD}">${esc(t.hero.cta)}</a>
-        <a class="btn btn-line-light" href="${REPO}">${esc(t.hero.source)}</a>
-      </div>
-      <p class="hero-note">${esc(t.hero.eyebrow)}. ${esc(t.hero.note)}</p>
-    </div>
-  </section>
-
-    <section id="who" class="sec">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.who.title)}</h2>
-        <p class="lead reveal">${esc(t.who.lead)}</p>
-        <div class="whos">${t.who.cards.map(([h, p, eg]) => `
-          <article class="who reveal">
-            <h3>${esc(h)}</h3>
-            <p>${esc(p)}</p>
-            <p class="who-eg"><span>${esc(t.who.eg)}</span>${esc(eg)}</p>
-          </article>`).join('')}
+      <div class="hero-text">
+        <h1>${t.hero.title}</h1>
+        <p class="hero-sub">${esc(t.hero.lead)}</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
+          <a class="btn btn-ghost" href="${REPO}">${icon('gh')}${esc(t.hero.source)}</a>
         </div>
+        <p class="hero-note">${esc(t.hero.note)}</p>
       </div>
-    </section>
-
-    <section id="how" class="sec">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.how.title)}</h2>
-        <p class="lead reveal">${esc(t.how.lead)}</p>
-      </div>
-      <div class="wrap svcs">${steps}
-      </div>
-    </section>
-
-    <section id="demo-sec" class="sec sec-tight">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.demo.label)}</h2>
+      <div class="hero-demo">
         ${demoBlock(t, lang)}
       </div>
-    </section>
-
-  <section id="check" class="dark">
+    </div>
     <div class="wrap">
-      <h2 class="reveal">${esc(t.check.title)}</h2>
-      <p class="dark-lead reveal">${esc(t.check.lead)}</p>
-      <div class="proofs">${philo}
+      <ul class="works"><li class="lbl">${esc(t.works)}</li>${works}<li class="lbl lbl-opt">${esc(t.sites.optional)}</li></ul>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="wrap">
+      <dl class="stats-in">${stats}</dl>
+    </div>
+  </section>
+
+  <section id="who" class="sec">
+    <div class="wrap">
+      ${secH(t.tags.who, t.who.title, t.who.lead)}
+      <div class="grid g4">${whos}
       </div>
     </div>
   </section>
 
-    <section class="sec">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.rows.title)}</h2>
-        <div class="row reveal">
-          <div class="row-text">
-            <h3 class="row-h">${esc(t.rows.msg)}</h3>
-            <p>${esc(t.types.lead)}</p>
-            <ul class="chips">${chips}</ul>
-          </div>
-          <div class="row-img row-img-panel">${picture(lang, 'panel', t.hero.alt, { w: 678, h: 1024 })}</div>
-        </div>
-        <div class="row row-flip reveal">
-          <div class="row-text">
-            <h3 class="row-h">${esc(t.rows.files)}</h3>
-            <p>${esc(t.files.text)}</p>
-            <h3 class="row-h row-h2">${esc(t.rows.sites)}</h3>
-            <p>${esc(t.sites.text)}</p>
-            <ul class="sites">${sites}</ul>
-          </div>
-          <div class="row-img">${picture(lang, 'log', t.check.alt, { w: 1600, h: 1000 })}</div>
-        </div>
-        <div class="row-wide reveal">${picture(lang, 'answer', t.how.alt, { w: 1720, h: 880 })}</div>
+  <section id="how" class="sec">
+    <div class="wrap">
+      ${secH(t.nav.how, t.how.title, t.how.lead)}
+      <div class="grid g3">${steps}
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="teams" class="sec">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.teams.title)}</h2>
-        <p class="lead reveal">${esc(t.teams.lead)}</p>
-        <ul class="quotes">${teams}
-        </ul>
-        <div class="ctas reveal">
-          <a class="btn btn-dark" href="mailto:${MAIL}?subject=Velami">${esc(t.teams.cta)}</a>
-          <a class="btn btn-line" href="${REPO}/blob/main/docs/ENTERPRISE.md">${esc(t.teams.guide)}</a>
-        </div>
+  <section id="check" class="sec sec-dark">
+    <div class="wrap">
+      ${secH(t.nav.check, t.check.title, t.check.lead)}
+      <div class="grid g2">${proofs}
       </div>
-    </section>
+      <figure class="frame reveal">
+        <div class="frame-bar"><i></i><i></i><i></i><span>${esc(t.logTitle)}</span></div>
+        ${picture(lang, 'log', t.check.alt)}
+      </figure>
+    </div>
+  </section>
 
-    <section id="faq" class="sec">
-      <div class="wrap">
-        <h2 class="reveal">${esc(t.faq.title)}</h2>
-        <div class="faq reveal">${faq}
+  <section id="hides" class="sec">
+    <div class="wrap">
+      ${secH(t.tags.hides, t.rows.title)}
+      <article class="cell feat reveal">
+        <div class="feat-text">
+          <h3>${esc(t.rows.msg)}</h3>
+          <p>${esc(t.types.lead)}</p>
+          <ul class="chips">${chips}</ul>
         </div>
+        <div class="feat-art">${picture(lang, 'panel', t.hero.alt)}</div>
+      </article>
+      <div class="grid g2 grid-next">
+        <article class="cell card reveal">
+          <h3>${esc(t.rows.files)}</h3>
+          <p>${esc(t.files.text)}</p>
+          <ul class="chips chips-mono">${FORMATS.map((f) => `<li>${f}</li>`).join('')}</ul>
+        </article>
+        <article class="cell card reveal">
+          <h3>${esc(t.rows.sites)}</h3>
+          <p>${esc(t.sites.text)}</p>
+          <ul class="sites">${SITES.map((s) => `<li>${esc(s)}</li>`).join('')}${OPTIONAL_SITES.map((s) => `<li class="opt">${esc(s)}</li>`).join('')}</ul>
+        </article>
       </div>
-    </section>
+    </div>
+  </section>
 
-  <section class="band">
-    <img class="band-photo" src="/img/photo-desk.webp" alt="" width="2048" height="1152" loading="lazy" decoding="async">
-    <div class="wrap band-in">
-      <div class="band-text">
+  <section id="teams" class="sec">
+    <div class="wrap">
+      ${secH(t.tags.teams, t.teams.title, t.teams.lead)}
+      <div class="grid g3">${teams}
+      </div>
+      <div class="ctas ctas-sec reveal">
+        <a class="btn btn-primary" href="mailto:${MAIL}?subject=Velami">${esc(t.teams.cta)}</a>
+        <a class="btn btn-ghost" href="${REPO}/blob/main/docs/ENTERPRISE.md">${esc(t.teams.guide)}${icon('arrow')}</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="sec">
+    <div class="wrap faq-in">
+      ${secH(t.tags.faq, t.faq.title)}
+      <div class="faq reveal">${faq}
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="final-in">
         <h2>${esc(t.final.title)}</h2>
         <p>${esc(t.final.text)}</p>
         <div class="ctas">
-          <a class="btn btn-light" href="${DOWNLOAD}">${esc(t.hero.cta)}</a>
-          <a class="btn btn-line-light" href="mailto:${MAIL}">${esc(t.final.ask)}</a>
+          <a class="btn btn-invert" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
+          <a class="btn btn-invert-ghost" href="mailto:${MAIL}">${esc(t.final.ask)}</a>
         </div>
       </div>
     </div>
@@ -387,20 +423,22 @@ function md2html(md) {
 
 function privacy(lang, sections) {
   const t = T[lang];
+  const home = `/${lang}/`;
   const body = md2html(sections.parts[lang]);
   const ver = { en: sections.version, it: sections.version.replace('Version', 'Versione').replace('November', 'novembre'), ru: sections.version.replace('Version', 'Версия').replace('November', 'ноября') }[lang];
+  // Заголовок без неразрывных пробелов: на узком экране длинное название должно переноситься.
   return `${head(t, lang, { title: `${t.privacy.title} · Velami`, description: t.description, canonical: 'privacy' })}
 <body>
-${header(t, lang)}
-<main class="doc">
-  <div class="wrap narrow">
-    <a class="back" href="/">${icon('arrow', 'ic ic-flip')}${esc(t.privacy.back)}</a>
-    <h1>${esc(t.privacy.title)}</h1>
-    <p class="muted">${inline(ver.split('. Extension')[0])}.</p>
+${header(t, lang, home)}
+<main id="main" class="doc">
+  <div class="wrap doc-in">
+    <a class="back" href="${home}">${icon('arrow', 'ic ic-flip')}${esc(t.privacy.back)}</a>
+    <h1>${esc(CONTENT[lang].privacy.title)}</h1>
+    <p class="doc-ver">${inline(ver.split('. Extension')[0])}.</p>
     ${body}
   </div>
 </main>
-${footer(t, lang)}
+${footer(t, lang, home)}
 </body>
 </html>
 `;
@@ -421,10 +459,11 @@ async function main() {
   const css = readFileSync(path.join(SRC, 'fonts', 'fonts.css'), 'utf8') + '\n' + readFileSync(path.join(SRC, 'style.css'), 'utf8');
   mkdirSync(path.join(OUT, 'fonts'), { recursive: true });
   for (const f of readdirSync(path.join(SRC, 'fonts')).filter((x) => x.endsWith('.woff2'))) copyFileSync(path.join(SRC, 'fonts', f), path.join(OUT, 'fonts', f));
+  // Моноширинный шрифт берётся из того же пакета, что и в расширении (scripts/vendor.mjs), в репозитории его копии нет.
+  const plex = path.join(ROOT, 'node_modules', '@fontsource', 'ibm-plex-mono', 'files');
+  for (const w of [400, 500, 600]) for (const sub of ['latin', 'cyrillic']) copyFileSync(path.join(plex, `ibm-plex-mono-${sub}-${w}-normal.woff2`), path.join(OUT, 'fonts', `plex-${sub}-${w}.woff2`));
   copyFileSync(path.join(ROOT, 'src', 'detector.js'), path.join(OUT, 'detector.js'));
   copyFileSync(path.join(SRC, 'demo.js'), path.join(OUT, 'demo.js'));
-  webp(path.join(SRC, 'photos', 'hero.jpg'), path.join(OUT, 'img', 'photo-hero.webp'));
-  webp(path.join(SRC, 'photos', 'desk.jpg'), path.join(OUT, 'img', 'photo-desk.webp'));
   const { createHash } = await import('node:crypto');
   HASH = createHash('sha256').update(css).update(readFileSync(path.join(SRC, 'demo.js'))).update(readFileSync(path.join(ROOT, 'src', 'detector.js'))).digest('hex').slice(0, 10);
   writeFileSync(path.join(OUT, 'style.css'), css);
@@ -440,11 +479,13 @@ async function main() {
     const shots = SHOTS.replace('{lang}', lang);
     const dir = path.join(OUT, 'img', lang);
     mkdirSync(dir, { recursive: true });
-    const need = { panel: ['panel-alpha.png'], answer: ['answer.png', 1720], log: ['log.png', 1600] };
+    const need = { panel: ['panel-alpha.png'], log: ['log.png', 1600] };
     for (const [name, [file, w]] of Object.entries(need)) {
       const src = path.join(shots, file);
       if (!existsSync(src)) throw new Error(`нет скриншота ${src}`);
       webp(src, path.join(dir, name + '.webp'), w);
+      const size = pngSize(src);
+      SIZES[`${lang}/${name}`] = w ? { w, h: Math.round(size.h * w / size.w) } : size;
     }
     writeFileSync(path.join(OUT, `index.${lang}.html`), index(lang));
     writeFileSync(path.join(OUT, `privacy.${lang}.html`), privacy(lang, sections));

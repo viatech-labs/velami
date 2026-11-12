@@ -2,11 +2,14 @@
 // Локальный просмотр dist/site с тем же выбором языка, что в nginx: node site/preview.mjs [port]
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'site');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.txt': 'text/plain', '.xml': 'application/xml' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.txt': 'text/plain', '.xml': 'application/xml' };
+// Та же политика, что на проде (headers.conf): встроенный стиль или скрипт сломается уже здесь, а не после выкладки.
+const CSP = (readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'headers.conf'), 'utf8').match(/Content-Security-Policy "([^"]+)"/) || [])[1] || '';
 
 export function pickLang(header = '') {
   const first = header.split(',')[0].trim().toLowerCase();
@@ -25,7 +28,7 @@ export function serve(port = 8090) {
     const file = resolve(req.url, req.headers['accept-language']);
     try {
       const body = await readFile(path.join(DIR, path.normalize(file).replace(/^(\.\.[/\\])+/, '')));
-      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', vary: 'Accept-Language' });
+      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', vary: 'Accept-Language', 'x-content-type-options': 'nosniff', ...(file.endsWith('.html') && CSP ? { 'content-security-policy': CSP } : {}) });
       res.end(body);
     } catch {
       res.writeHead(404).end('not found');
