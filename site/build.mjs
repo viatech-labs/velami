@@ -21,6 +21,9 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
 const SHOTS = arg('--shots', '/tmp/shots-{lang}');
 const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')).version;
 const PKG_SHA = (existsSync(path.join(ROOT, 'dist', `velami-${VERSION}.zip.sha256`)) ? readFileSync(path.join(ROOT, 'dist', `velami-${VERSION}.zip.sha256`), 'utf8') : '0'.repeat(64)).split(/\s/)[0];
+/* Число файлов в пакете берётся из списка сборки, чтобы пример на сайте совпадал с выпущенной версией. */
+const PKG_LIST = path.join(ROOT, 'dist', `velami-${VERSION}.files.json`);
+const PKG_FILES = existsSync(PKG_LIST) ? Object.keys(JSON.parse(readFileSync(PKG_LIST, 'utf8')).files).length : 0;
 
 const NB = '\u00a0';
 const glue = (s) => {
@@ -184,7 +187,7 @@ function index(lang) {
     `<div class="mock"><p class="mock-h">${esc(pr.panel)}</p><ul class="mock-list">${pr.items.map(([v, k]) => `<li class="${k ? 'on' : 'off'}"><span class="box"></span><span class="v">${esc(v)}</span>${k ? `<mark class="tok">${esc(k)}</mark>` : `<small>${esc(pr.keep)}</small>`}</li>`).join('')}</ul></div>`,
     `<div class="mock"><p class="mock-h">${esc(pr.log)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-sha">SHA-256 ${logSha.slice(0, 24)}…</p></div>`,
     `<div class="mock"><p class="mock-h">${esc(pr.echo)}</p><p class="mock-msg">${toks(pr.logText)}</p><p class="mock-ok">✓ ${esc(pr.echoOk)}</p></div>`,
-    `<pre class="term"><code><span class="dim">$</span> shasum -a 256 velami-${VERSION}.zip\n${PKG_SHA.slice(0, 40)}…\n<span class="dim">$</span> npm run verify\n<span class="ok">✓ 210 files match the sources</span></code></pre>`,
+    `<pre class="term"><code><span class="dim">$</span> shasum -a 256 velami-${VERSION}.zip\n${PKG_SHA.slice(0, 40)}…\n<span class="dim">$</span> npm run verify\n<span class="ok">✓ ${PKG_FILES || 224} files match the sources</span></code></pre>`,
   ];
   const philo = t.check.cards.map(([h, p], i) => `
         <article class="proof proof-${i + 1} reveal">
