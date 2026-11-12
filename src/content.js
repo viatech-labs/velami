@@ -277,6 +277,10 @@
   /* ---------- поле ввода и предпросмотр ---------- */
 
   const EDITABLE = 'textarea, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]';
+  /* Поля формы внутри ответа модели (черновик письма в Claude: тема и текст). Это текст модели,
+     а не сообщение пользователя: полем ввода они не считаются, значения в них возвращаются. */
+  const ANSWERS = '[data-testid="assistant-message"]';
+  const ANSWER_FIELDS = `${ANSWERS} textarea, ${ANSWERS} input[type="text"], ${ANSWERS} input:not([type])`;
   let composer = null;
   let previewTimer = null;
   let previewSeq = 0;
@@ -338,7 +342,7 @@
 
   document.addEventListener('input', (e) => {
     const el = e.target && e.target.closest ? e.target.closest(EDITABLE) : null;
-    if (!el || host.contains(el)) return;
+    if (!el || host.contains(el) || el.matches(ANSWER_FIELDS)) return;
     composer = el;
     if (e.isTrusted && attempt && attempt.field === el) attempt.typed = fieldText(el).trim();
     schedulePreview();
@@ -389,7 +393,7 @@
          сообщение ушло мимо. Текст, который человек сам поправил или стёр, отправкой не считается. */
       /* Сайт мог перерисовать поле (ChatGPT после своей ошибки): ищем поле с тем же текстом заново. */
       if (!mine.field.isConnected) {
-        const again = [...document.querySelectorAll(EDITABLE)].find((el) => !host.contains(el) && fieldText(el).trim() === text);
+        const again = [...document.querySelectorAll(EDITABLE)].find((el) => !host.contains(el) && !el.matches(ANSWER_FIELDS) && fieldText(el).trim() === text);
         if (again) mine.field = again;
       }
       const now = mine.field.isConnected ? fieldText(mine.field).trim() : null;
@@ -537,6 +541,40 @@
     scheduleHighlights();
   }
 
+  /* Поле формы в ответе. Его значение лежит не в тексте страницы, а в свойстве value, и сайт держит
+     копию у себя: значение ставится так же, как при вводе с клавиатуры, с событием input, чтобы сайт
+     принял его и отдавал кнопками «Копировать» и «Открыть в почте». Пока ответ ещё печатается, поле
+     не трогается: иначе сайт счёл бы его исправленным и перестал дописывать. Если сайт упорно
+     возвращает метки, после трёх попыток подряд поле остаётся как есть. */
+  const fieldTries = new WeakMap();
+  let fieldsTimer = 0;
+  function restoreField(el) {
+    const v = el.value;
+    if (!v || !TOKEN_TEST.test(v) || host.contains(el) || el.closest('[data-is-streaming="true"]')) return;
+    const r = PG.rehydrate(v, byToken);
+    if (!r.spans.length || r.text === v) return;
+    const now = Date.now();
+    const t = fieldTries.get(el);
+    if (t && t.from === v && now - t.at < 3000) {
+      if (t.n >= 3) return;
+      t.n++;
+      t.at = now;
+    } else {
+      fieldTries.set(el, { from: v, n: 1, at: now });
+    }
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, r.text);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function scanFields() {
+    fieldsTimer = 0;
+    if (!rehydrateOn || !enabled) return;
+    for (const el of document.querySelectorAll(ANSWER_FIELDS)) restoreField(el);
+  }
+  function scheduleFields() {
+    if (!fieldsTimer) fieldsTimer = setTimeout(scanFields, 150);
+  }
+
   function scanTree(rootNode) {
     if (!rehydrateOn || !enabled || !rootNode) return;
     if (rootNode.nodeType === Node.TEXT_NODE) { processText(rootNode); return; }
@@ -571,6 +609,7 @@
       if (m.type === 'characterData') processText(m.target);
       else for (const n of m.addedNodes) scanTree(n);
     }
+    scheduleFields();
   });
 
   /* ---------- подсказка над подставленным значением ---------- */
@@ -1159,6 +1198,7 @@
     const r = await chrome.storage.local.get(['vault', 'settings', 'policy']);
     applyStorage(r);
     if (document.body) scanTree(document.body);
+    scheduleFields();
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -1171,7 +1211,7 @@
     (document.head || document.documentElement).append(style);
     document.documentElement.append(host);
     window.addEventListener('copy', onCopy);
-    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-is-streaming'] });
     syncFromStorage().finally(refreshPreview);
   }
 

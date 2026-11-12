@@ -398,11 +398,11 @@ async function readText(page) {
   }
 }
 
-/* Черновики, которые сайт даёт править (письмо у Claude в textarea, у ChatGPT в ProseMirror):
-   их текста нет в innerText страницы или Velami его не трогает. */
+/* Черновики, которые сайт даёт править (письмо у Claude в полях формы, у ChatGPT в ProseMirror):
+   их текста нет в innerText страницы. Метка в таком поле значит, что значение не вернулось. */
 async function draftText(page) {
   try {
-    const r = await page._client().send('Runtime.evaluate', { returnByValue: true, expression: `[...document.querySelectorAll('textarea, [contenteditable="true"]')]
+    const r = await page._client().send('Runtime.evaluate', { returnByValue: true, expression: `[...document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]')]
       .filter((n) => n.getBoundingClientRect().height > 0).map((n) => n.value !== undefined ? n.value : n.innerText).join('\\n')` });
     return String(r.result.value || '');
   } catch {

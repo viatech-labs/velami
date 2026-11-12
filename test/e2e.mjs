@@ -18,6 +18,8 @@ const MOCK_PAGE = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><t
 <div id="prompt-textarea" contenteditable="true"></div><p><button data-testid="send-button" id="send">Отправить</button>
 <button id="copy-text">Копировать</button><button id="copy-rich">Копировать с форматированием</button><button id="copy-event">Копировать через событие</button>
 <div data-testid="chatgpt-writing-block"><div id="draft" class="ProseMirror" contenteditable="true"></div></div>
+<div data-testid="assistant-message" data-is-streaming="false" id="mail"><input type="text" id="mail-subject"><textarea id="mail-body" rows="4" cols="60"></textarea>
+<span id="mail-buttons"><button id="mail-copy">Копировать письмо</button></span></div><textarea id="notes" rows="1"></textarea>
 <input type="file" id="file"></p><div id="drop" style="padding:16px;border:2px dashed #aaa">Перетащите файл</div><pre id="file-seen"></pre>
 <script>
 let lastRaw = '';
@@ -45,6 +47,35 @@ new MutationObserver(() => {
   saveTimer = setTimeout(() => fetch('/backend-api/conversation/message/writing-blocks', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ writing_block: { content: draft.innerText.replace(/[@_*-]/g, '\\\\$&') + '&#x20;' } }) }).catch(() => {}), 150);
 }).observe(draft, { subtree: true, childList: true, characterData: true });
+/* Черновик письма как у Claude: тема и текст в полях формы внутри ответа. Сайт держит их значения
+   у себя (как React): принимает правку по событию input, сам возвращает в поле своё значение,
+   по правке показывает кнопку сброса и сообщает о правке на сервер. */
+const mail = { subject: '', body: '', model: { subject: '', body: '' } };
+const mailEl = { subject: document.getElementById('mail-subject'), body: document.getElementById('mail-body') };
+const mailReset = Object.assign(document.createElement('button'), { id: 'mail-reset', textContent: 'Сбросить изменения' });
+let mailTimer = 0;
+const renderMail = () => {
+  for (const k of ['subject', 'body']) if (mailEl[k].value !== mail[k]) mailEl[k].value = mail[k];
+  const edited = mail.subject !== mail.model.subject || mail.body !== mail.model.body;
+  if (edited && !mailReset.isConnected) document.getElementById('mail-buttons').append(mailReset);
+  if (!edited) mailReset.remove();
+  window.__mailto = 'mailto:?subject=' + encodeURIComponent(mail.subject) + '&body=' + encodeURIComponent(mail.body);
+};
+for (const k of ['subject', 'body']) mailEl[k].addEventListener('input', () => {
+  mail[k] = mailEl[k].value;
+  renderMail();
+  clearTimeout(mailTimer);
+  mailTimer = setTimeout(() => fetch('/backend-api/mail-draft', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ widget: 'message_compose', action: 'edit', subject: mail.subject, body: mail.body }) }).catch(() => {}), 150);
+});
+mailReset.onclick = () => { Object.assign(mail, mail.model); renderMail(); };
+document.getElementById('mail-copy').onclick = () => navigator.clipboard.writeText('Subject: ' + mail.subject + '\\n\\n' + mail.body).then(() => { copyResult = 'ok'; }, (e) => { copyResult = String(e); });
+window.modelMail = (subject, body, streaming) => {
+  document.getElementById('mail').setAttribute('data-is-streaming', String(streaming));
+  mail.model = { subject, body };
+  Object.assign(mail, mail.model);
+  renderMail();
+};
 document.getElementById('file').onchange = async (e) => {
   const f = e.target.files[0];
   window.__fileText = await f.text();
@@ -111,7 +142,7 @@ try {
 
   const page = await browser.newPage();
   await scheme(page, 'light');
-  const captured = { conversation: null, form: null, analytics: null, beacon: null, upload: null, drop: null, block: [] };
+  const captured = { conversation: null, form: null, analytics: null, beacon: null, upload: null, drop: null, block: [], mail: [] };
   await browser.defaultBrowserContext().overridePermissions('https://chatgpt.com', ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
   await page.setRequestInterception(true);
   page.on('request', async (req) => {
@@ -137,6 +168,10 @@ try {
     }
     if (url === 'https://chatgpt.com/backend-api/conversation/message/writing-blocks') {
       captured.block.push(req.postData());
+      return req.respond({ status: 200, contentType: 'application/json', body: '{}' });
+    }
+    if (url === 'https://chatgpt.com/backend-api/mail-draft') {
+      captured.mail.push(req.postData());
       return req.respond({ status: 200, contentType: 'application/json', body: '{}' });
     }
     if (url === 'https://chatgpt.com/ces/v1/t') {
@@ -319,6 +354,76 @@ try {
     assert.match(last, /Gentile \[\[PERSON_1\]\],/);
     assert.match(last, /scrivo da \[\[EMAIL_1\]\], carta \[\[CARD_1\]\]\./);
   });
+
+  /* Черновик письма в полях формы (Claude): значения возвращаются в тему и в текст, сайт получает
+     их как правку и отдаёт своими кнопками. Пока ответ печатается, поля не трогаются. Обычное поле
+     ввода вне ответа остаётся с метками. Всё, что сайт шлёт о черновике, уходит с метками. */
+  const MAIL_SUBJECT = 'Richiesta di [[PERSON_1]]';
+  const MAIL_BODY = 'Gentile banca,\nsono [[PERSON_1]], email [[EMAIL_1]], IBAN [[IBAN_1]].\nCordiali saluti';
+  const mailState = () => page.evaluate(() => ({
+    subject: document.getElementById('mail-subject').value, body: document.getElementById('mail-body').value,
+    site: mail.subject + '\n' + mail.body, mailto: decodeURIComponent(window.__mailto), notes: document.getElementById('notes').value,
+    reset: !!document.getElementById('mail-reset'),
+  }));
+  await page.evaluate((s, b) => { document.getElementById('notes').value = 'заметка с [[EMAIL_1]]'; window.modelMail(s, b, true); }, MAIL_SUBJECT, MAIL_BODY);
+  await sleep(700);
+  const mailStreaming = await mailState();
+  check('черновик письма в полях формы: пока ответ печатается, поля не тронуты', () => {
+    assert.equal(mailStreaming.subject, MAIL_SUBJECT);
+    assert.equal(mailStreaming.body, MAIL_BODY);
+  });
+  await page.evaluate(() => document.getElementById('mail').setAttribute('data-is-streaming', 'false'));
+  await sleep(700);
+  const mailDone = await mailState();
+  check('черновик письма в полях формы: в теме и тексте настоящие значения, сайт их принял', () => {
+    assert.equal(mailDone.subject, 'Richiesta di Мария Петрова');
+    assert.equal(mailDone.body, 'Gentile banca,\nsono Мария Петрова, email maria.petrova@example.com, IBAN IT60 X054 2811 1010 0000 0123 456.\nCordiali saluti');
+    assert.equal(mailDone.site, mailDone.subject + '\n' + mailDone.body);
+    assert.equal(mailDone.notes, 'заметка с [[EMAIL_1]]', 'тронуто поле вне ответа');
+  });
+  await page.evaluate(() => { copyResult = ''; });
+  await page.click('#mail-copy');
+  await page.waitForFunction(() => copyResult !== '', { timeout: 5000 });
+  const mailCopy = await page.evaluate(() => navigator.clipboard.readText());
+  check('кнопки черновика («Копировать», «Открыть в почте») дают настоящие значения', () => {
+    for (const s of [mailCopy, mailDone.mailto]) {
+      for (const v of ['Мария Петрова', 'maria.petrova@example.com', 'IT60 X054 2811 1010 0000 0123 456']) assert.ok(s.includes(v), 'нет значения ' + v + ': ' + s);
+      assert.ok(!/\[\[[A-Z]+_\d+\]\]/.test(s), 'остались метки: ' + s);
+    }
+  });
+  await page.click('#mail-reset');
+  await sleep(700);
+  const mailReset = await mailState();
+  check('сайт вернул в черновик текст модели («Сбросить изменения»): значения подставлены снова', () => {
+    assert.equal(mailReset.subject, mailDone.subject);
+    assert.equal(mailReset.body, mailDone.body);
+  });
+  await page.evaluate(() => { const b = document.getElementById('mail-body'); b.focus(); b.setSelectionRange(b.value.length, b.value.length); });
+  await page.keyboard.type(' Scrivetemi a maria.petrova@example.com', { delay: 2 });
+  await sleep(900);
+  const mailTyped = await mailState();
+  const mailPanel = await (async () => {
+    const { root: d } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+    const acc = [];
+    const walkDom = (n, inside) => {
+      const mine = inside || (n.attributes || []).includes('data-pg-gateway');
+      if (n.nodeType === 3 && mine) acc.push(n.nodeValue);
+      for (const c of [...(n.children || []), ...(n.shadowRoots || [])]) walkDom(c, mine);
+    };
+    walkDom(d, false);
+    return acc.join(' ');
+  })();
+  check('правка черновика человеком: это не поле ввода чата, сайту правка уходит с метками', () => {
+    assert.ok(mailTyped.body.endsWith('Cordiali saluti Scrivetemi a maria.petrova@example.com'), mailTyped.body);
+    assert.ok(mailPanel.length > 20, 'панель не найдена');
+    assert.ok(!mailPanel.includes('Gentile banca'), 'панель показала черновик как сообщение: ' + mailPanel);
+    assert.ok(captured.mail.length >= 3, 'сайт не сообщил о правках: ' + captured.mail.length);
+    for (const body of captured.mail) for (const v of ['maria.petrova', 'example.com', 'Петрова', 'IT60']) assert.ok(!body.includes(v), 'в запросе о черновике осталось ' + v + ': ' + body);
+    const last = JSON.parse(captured.mail[captured.mail.length - 1]);
+    assert.equal(last.subject, MAIL_SUBJECT);
+    assert.equal(last.body, MAIL_BODY + ' Scrivetemi a [[EMAIL_1]]');
+  });
+  await page.evaluate(() => { window.modelMail('', '', false); document.getElementById('notes').value = ''; });
 
   const FILE_TEXT = 'имя;почта;iban\nМария Петрова;maria.petrova@example.com;IT60 X054 2811 1010 0000 0123 456\nключ sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd\n';
   const filePath = path.join(out, 'clienti.csv');
