@@ -37,6 +37,7 @@ const RU = {
   // Выдуманный ключ собирается из частей, чтобы сканер секретов в репозитории не принимал его за настоящий.
   plate: 'А123ВС77', email: 'anna.mironova@example.com', key: ['sk', 'proj', 'Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z'].join('-'),
 };
+const COLLEAGUE = 'giulia.bianchi@example.com';
 const TXT = path.join(out, 'nota.txt');
 writeFileSync(TXT, `Promemoria: scrivere a ${IT.email} entro venerdì.`);
 
@@ -45,8 +46,9 @@ writeFileSync(TXT, `Promemoria: scrivere a ${IT.email} entro venerdì.`);
 const CASES = {
   'text-it': {
     message: `Sono ${IT.name}, codice fiscale ${IT.cf}, telefono ${IT.phone}, email ${IT.email}, carta ${IT.card}, IBAN ${IT.iban}. Scrivi una breve mail alla banca con questi dati.`,
-    secrets: Object.values(IT), shown: [IT.name],
-    followup: { message: 'Ripeti solo il mio IBAN e il mio codice fiscale, senza altro testo.', shown: [IT.iban, IT.cf] },
+    /* Во втором сообщении новое значение: иначе проверка трафика на нём пустая (AIGW-29). */
+    secrets: [...Object.values(IT), COLLEAGUE], shown: [IT.name],
+    followup: { message: `La mia collega è ${COLLEAGUE}. Ripeti solo il mio IBAN e il mio codice fiscale, senza altro testo.`, shown: [IT.iban, IT.cf] },
     copy: true,
   },
   'text-ru': {
@@ -265,9 +267,15 @@ try {
         return { ok: null, skipped: 'сайт недоступен из этой страны' };
       }
       await dismissPopups(page);
-      const composer = await findComposer(page);
+      let composer = await findComposer(page);
       if (!composer) { await shot('0-nocomposer'); return { ok: false, error: 'нет поля ввода: ' + await page.title() }; }
-      const focus = async () => { const b = await composer.boundingBox(); if (b) await page.mouse.click(b.x + 20, b.y + b.height / 2); };
+      /* После первого сообщения сайт может заменить поле ввода другим (Mistral показывает уточняющий
+         вопрос со своим полем ответа): старый элемент исчезает, поле ищется заново. */
+      const focus = async () => {
+        let b = await composer.boundingBox().catch(() => null);
+        if (!b) { const next = await findComposer(page); if (next) { composer = next; b = await composer.boundingBox().catch(() => null); } }
+        if (b) await page.mouse.click(b.x + 20, b.y + b.height / 2);
+      };
       await focus();
 
       let dialogText = null;
