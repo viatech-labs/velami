@@ -483,9 +483,13 @@ try {
   writeFileSync(path.join(out, 'nota.txt'), 'Scrivere a mario.rossi@example.com');
   await page.evaluate(() => { document.getElementById('file').value = ''; });
   await (await page.$('#file')).uploadFile(path.join(out, 'nota.txt'));
-  const txt = await waitUpload('nota.txt');
+  /* Содержимое берём из файла, который получила страница: тело запроса с файлом Chrome отдаёт не всегда. */
+  const nota = await sent('nota.txt');
+  const txt = nota && Buffer.from(nota.bytes).toString('utf8');
   check('текстовый файл чистится без вопросов, как раньше', () => {
-    assert.ok(txt && txt.includes('[[EMAIL_1]]') && !txt.includes('mario.rossi@example.com'));
+    assert.ok(nota, 'текстовый файл не дошёл до сайта');
+    assert.ok(!txt.includes('mario.rossi@example.com'), 'в файле настоящий адрес: ' + txt);
+    assert.ok(txt.includes('[[EMAIL_1]]'), 'в файле нет метки: ' + txt);
   });
 
   await sleep(800);
