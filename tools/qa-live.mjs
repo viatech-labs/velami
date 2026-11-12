@@ -554,9 +554,12 @@ async function dismissPopups(page) {
   await sleep(500);
 }
 
+/* Поле чата стоит ниже всего остального. Выше него бывают редактируемые черновики в ответе
+   (письмо у ChatGPT): первое по порядку поле на странице после ответа уже не поле чата. */
 async function findComposer(page) {
   const h = await page.waitForFunction(() => [...document.querySelectorAll('textarea, [contenteditable="true"], [contenteditable="plaintext-only"]')]
-    .find((n) => n.getBoundingClientRect().height > 0 && n.getBoundingClientRect().width > 200) || null, { timeout: 40000 }).catch(() => null);
+    .filter((n) => n.getBoundingClientRect().height > 0 && n.getBoundingClientRect().width > 200)
+    .sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0] || null, { timeout: 40000 }).catch(() => null);
   return h && h.asElement();
 }
 
