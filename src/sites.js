@@ -28,8 +28,10 @@
       wsSend: [/\/c\/api\/chat/], optional: true },
     { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/', hosts: ['chat.deepseek.com'],
       send: [{ path: /\/api\/v0\/chat\/completion$/ }], optional: true },
+    // Сообщение: JSON на /api/chat, текст в content[].text. Когда модель задаёт уточняющий вопрос,
+    // ответ пользователя уходит на /api/chat/resume в callbackResults[].result[] (снято 12/11/2026).
     { id: 'mistral', name: 'Mistral Le Chat', url: 'https://chat.mistral.ai/chat', hosts: ['chat.mistral.ai'],
-      send: [{ path: /^\/api\/(chat|trpc\/(message|chat)\.)/ }], optional: true },
+      send: [{ path: /^\/api\/(chat|trpc\/(message|chat)\.)/ }], textKeys: ['result'], optional: true },
     { id: 'grok', name: 'Grok', url: 'https://grok.com/', hosts: ['grok.com'],
       send: [{ path: /^\/rest\/app-chat\/conversations\// }], textKeys: ['message'], optional: true },
   ];

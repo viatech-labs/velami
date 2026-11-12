@@ -52,6 +52,13 @@ test('поля сообщения у сайтов со своими ключам
   const p = S.siteFor('www.perplexity.ai');
   assert.ok(W.isUserText({ key: 'query_str' }, p, 'mario'));
   assert.ok(!W.isUserText({ key: 'query_str' }, null, 'mario'));
+  /* Mistral: ответ на уточняющий вопрос модели лежит в callbackResults[].result[]. */
+  const m = S.siteFor('chat.mistral.ai');
+  const resume = { chatId: 'c-1', callbackResults: [{ callbackId: 'chatcmpl-tool-1', callbackName: 'ask_user_question', result: ['scrivi a mario.rossi@example.com'] }] };
+  const refs = W.collect(resume);
+  assert.deepEqual(refs.filter((r) => W.isUserText(r, m)).map((r) => r.holder[r.k]), ['scrivi a mario.rossi@example.com']);
+  assert.ok(S.isSend(m, new URL('https://chat.mistral.ai/api/chat/resume'), 'chat.mistral.ai'));
+  assert.ok(!W.isUserText({ key: 'result' }, p, 'mario'));
   const g = S.siteFor('gemini.google.com');
   assert.ok(W.isUserText({ key: 0 }, g, 'scrivi a mario.rossi@example.com'));
   assert.ok(!W.isUserText({ key: 0 }, g, 'c_9f2b1e7a3d'));

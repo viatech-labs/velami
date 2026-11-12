@@ -129,7 +129,23 @@ document.getElementById('send').onclick = async () => {
 
 const DEEPSEEK = jsonSite('DeepSeek', '/api/v0/chat/completion', (t) => ({ chat_session_id: '7c1e0b8e-0000-4000-8000-00000000000a', parent_message_id: null, prompt: t, ref_file_ids: [], thinking_enabled: false, search_enabled: false }));
 const GROK = jsonSite('Grok', '/rest/app-chat/conversations/new', (t) => ({ temporary: false, modelName: 'grok-4', message: t, fileAttachments: [], imageAttachments: [], disableSearch: false }));
-const MISTRAL = jsonSite('Le Chat', '/api/chat', (t) => ({ chatId: '0b5e-test', mode: 'start', model: 'mistral-medium', messageInput: [{ type: 'text', text: t }], features: [] }));
+/* Mistral (снято 12/11/2026): первое сообщение на /api/chat. Если модель задала уточняющий вопрос,
+   ответ на него сайт отправляет другим запросом, /api/chat/resume, текст в callbackResults[].result[]. */
+const MISTRAL = shell('Le Chat', textarea, '<button aria-label="Send" id="send">Invia</button>', `
+let asked = false;
+document.getElementById('send').onclick = async () => {
+  const text = read();
+  const body = asked
+    ? { chatId: '2973a35f-0000-4000-8000-000000000001', messageId: '46f54008-0000-4000-8000-000000000002', supportedTaskCallbacks: ['ask_user_question'], modelConfig: { model_alias: 'vibe-free', reasoning_effort: 'low' },
+        callbackResults: [{ callbackId: 'chatcmpl-tool-818ade5b2e741b97', callbackName: 'ask_user_question', result: [text] }] }
+    : { content: [{ type: 'text', text }], transcriptionsMetadata: [], incognito: false, files: [], features: ['beta-websearch'], modelConfig: { model_alias: 'vibe-free', reasoning_effort: 'low' }, mode: 'create', productType: 'work',
+        clientPromptData: { currentDate: '2026-11-12', userTimezone: 'T+01:00 (Europe/Rome)' }, supportedTaskCallbacks: ['ask_user_question'] };
+  try {
+    const r = await fetch(asked ? '/api/chat/resume' : '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    asked = true;
+    show(await r.text());
+  } catch (e) { fail(e); }
+};`);
 
 const COPILOT = shell('Copilot', textarea, '<button aria-label="Submit message" id="send">Invia</button>', `
 const ws = new WebSocket('wss://copilot.microsoft.com/c/api/chat?api-version=2');
@@ -293,7 +309,6 @@ try {
   for (const [name, url, key, pick] of [
     ['DeepSeek', 'https://chat.deepseek.com/', 'chat.deepseek.com/api/v0/chat/completion', (b) => b.prompt],
     ['Grok', 'https://grok.com/', 'grok.com/rest/app-chat/conversations/new', (b) => b.message],
-    ['Mistral', 'https://chat.mistral.ai/chat', 'chat.mistral.ai/api/chat', (b) => b.messageInput[0].text],
   ]) {
     page = await open(url);
     await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
@@ -307,6 +322,35 @@ try {
     await page.screenshot({ path: path.join(out, name.toLowerCase() + '.png') });
     await page.close();
   }
+
+  /* Mistral: первое сообщение, потом ответ на уточняющий вопрос модели. Второй запрос тоже отправка
+     сообщения: текст проверяется полностью, а тревоги «в обход» через 6 секунд быть не должно. */
+  page = await open('https://chat.mistral.ai/chat');
+  await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
+  await type(page);
+  answer = await sendAndAnswer(page, 'Mistral');
+  check('Mistral: сообщение только с метками, ответ с настоящими значениями', () => {
+    clean('Mistral', JSON.parse(captured['chat.mistral.ai/api/chat']).content[0].text);
+    restored('Mistral', answer);
+  });
+  await page.click('.ed');
+  await page.keyboard.type('Metti in copia giulia.bianchi@example.com, per il resto va bene.', { delay: 2 });
+  await sleep(700);
+  await page.click('#send');
+  await page.waitForFunction(() => document.querySelectorAll('.answer').length === 2, { timeout: 10000 });
+  await sleep(7000);
+  const mistralLog = (await ext({ type: 'getLog' })).filter((e) => e.site === 'chat.mistral.ai');
+  check('Mistral: ответ на уточняющий вопрос модели уходит с метками как сообщение, тревоги «в обход» нет', () => {
+    const b = JSON.parse(captured['chat.mistral.ai/api/chat/resume']);
+    assert.equal(b.callbackResults[0].result[0], 'Metti in copia [[EMAIL_2]], per il resto va bene.');
+    assert.equal(b.callbackResults[0].callbackId, 'chatcmpl-tool-818ade5b2e741b97');
+    assert.equal(b.callbackResults[0].callbackName, 'ask_user_question');
+    const sent = mistralLog.find((e) => e.kind === 'sent' && e.path === '/api/chat/resume');
+    assert.ok(sent && sent.channel === 'model' && sent.summary.count === 1, 'ответ не записан как сообщение модели: ' + JSON.stringify(sent));
+    assert.ok(!mistralLog.some((e) => e.kind === 'coverage'), 'тревога «в обход»: ' + JSON.stringify(mistralLog.filter((e) => e.kind === 'coverage')));
+  });
+  await page.screenshot({ path: path.join(out, 'mistral.png') });
+  await page.close();
 
   page = await open('https://copilot.microsoft.com/');
   await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
