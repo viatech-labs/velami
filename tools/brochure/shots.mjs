@@ -16,6 +16,25 @@ const LOCAL = {
     phone: '+44 7700 900123', person: 'Emily Watson', panel: ['[[ADDRESS_1]]', '[[PERSON_1]]', '[[IBAN_1]]'] },
 };
 
+// Выписка для кадра «чистая копия»: PDF с выдуманными данными. Владелец совпадает с именем из словаря.
+// Телефон не тот, что в примере со снятой галочкой: то значение пользователь сам разрешил отправлять.
+const STATEMENT = {
+  ru: { name: 'выписка.pdf', title: 'Выписка по счёту', holder: 'Владелец счёта', mail: 'Почта', phone: 'телефон', card: 'Карта', balance: 'Остаток', sum: '125 400,00 ₽',
+    email: 'olga.sokolova@example.com', tel: '+7 916 123-45-67', page2: 'Страница 2: операций за период нет.' },
+  it: { name: 'estratto.pdf', title: 'Estratto conto', holder: 'Intestatario', mail: 'Email', phone: 'telefono', card: 'Carta', balance: 'Saldo', sum: '1.250,50 EUR',
+    email: 'giulia.bianchi@example.com', tel: '+39 347 123 4567', iban: 'IT60 X054 2811 1010 0000 0123 456', page2: 'Pagina 2: nessun movimento nel periodo.' },
+  en: { name: 'statement.pdf', title: 'Account statement', holder: 'Account holder', mail: 'Email', phone: 'phone', card: 'Card', balance: 'Balance', sum: '1,250.50 GBP',
+    email: 'emily.watson@example.com', tel: '+44 7700 900456', iban: 'GB82 WEST 1234 5698 7654 32', page2: 'Page 2: no transactions in the period.' },
+};
+const CARD = '4111 1111 1111 1111';
+const statementHtml = (d, person) => `<!doctype html><meta charset="utf-8"><body style="font:15px Helvetica, Arial, sans-serif;margin:48px;color:#1d1d1f">
+<h1 style="font-size:30px;margin:0 0 22px">${d.title}</h1>
+<p>${d.holder}: ${person}.</p>
+<p>${d.mail} ${d.email}, ${d.phone} ${d.tel}.</p>
+<table border="1" cellpadding="8" style="border-collapse:collapse;margin-top:18px">
+${d.iban ? `<tr><td>IBAN</td><td>${d.iban}</td></tr>` : ''}<tr><td>${d.card}</td><td>${CARD}</td></tr><tr><td>${d.balance}</td><td>${d.sum}</td></tr></table>
+<div style="page-break-before:always"><p>${d.page2}</p></div></body>`;
+
 export async function captureShots({ extDir, out, lang }) {
   const S = STRINGS[lang];
   const L = LOCAL[lang];
@@ -204,7 +223,58 @@ export async function captureShots({ extDir, out, lang }) {
     await show('welcome');
     await snap(admin, 'welcome-dark');
 
-    return { shots, prompt: sent.prompt, message: S.message, panelText, echoChecks };
+    /* Чистая копия PDF: выписка прикладывается к чату, из окна Velami открывается предпросмотр копии.
+       Файл сайту не уходит: после снимка выбор отменяется. Кадр снимается последним, чтобы окно и
+       запись об отмене не попали в остальные снимки. */
+    const D = STATEMENT[lang];
+    const maker = await browser.newPage();
+    await maker.setContent(statementHtml(D, L.person), { waitUntil: 'load' });
+    const pdfPath = path.join(out, D.name);
+    writeFileSync(pdfPath, await maker.pdf({ format: 'A4' }));
+    await maker.close();
+    const clickNode = async (node) => {
+      const { model } = await cdp.send('DOM.getBoxModel', { nodeId: node.nodeId });
+      const [x1, y1, , , x3, y3] = model.content;
+      await chat.mouse.click((x1 + x3) / 2, (y1 + y3) / 2);
+    };
+    const has = (n, name) => { const a = n.attributes || []; for (let i = 0; i < a.length; i += 2) if (a[i] === name) return true; return false; };
+    const byClass = (n, cls) => { const a = n.attributes || []; for (let i = 0; i < a.length; i += 2) if (a[i] === 'class' && a[i + 1].split(' ').includes(cls)) return true; return false; };
+    const findNode = (n, test) => { if (test(n)) return n; for (const c of kids(n)) { const r = findNode(c, test); if (r) return r; } return null; };
+    const askParts = async () => {
+      const ask = findNode(await tree(), (n) => byClass(n, 'ask'));
+      if (!ask || has(ask, 'hidden')) return null;
+      const more = findNode(ask, (n) => byClass(n, 'ask-more'));
+      const btns = findNode(ask, (n) => byClass(n, 'btns'));
+      return more && !has(more, 'hidden') && btns ? { more, cancel: kids(btns).find((c) => c.nodeName === 'BUTTON') } : null;
+    };
+    await scheme(chat, 'light');
+    await chat.bringToFront();
+    const before = sent.file;
+    await chat.evaluate(() => { document.getElementById('file').value = ''; });
+    await (await chat.$('#file')).uploadFile(pdfPath);
+    let parts = null;
+    for (let i = 0; i < 240 && !parts; i++) { parts = await askParts(); if (!parts) await sleep(250); }
+    if (!parts) throw new Error('окно Velami с предпросмотром копии не появилось для ' + D.name);
+    const opened = browser.waitForTarget((t) => t.url().includes('/preview.html#'), { timeout: 120000 });
+    await clickNode(parts.more);
+    const tab = await (await opened).page();
+    await tab.setViewport({ width: W, height: H, deviceScaleFactor: 2 });
+    await scheme(tab, 'light');
+    await tab.waitForSelector('#facts:not([hidden])', { timeout: 60000 });
+    await tab.waitForSelector('#sheets canvas', { timeout: 60000 });
+    await sleep(1200);
+    const copyText = await tab.evaluate(() => document.body.innerText);
+    for (const v of [L.person, D.email, D.tel, D.iban, CARD].filter(Boolean)) if (copyText.includes(v)) throw new Error('в чистой копии осталось: ' + v);
+    await snap(tab, 'copy');
+    await tab.click('#back');
+    for (let i = 0; i < 40 && !tab.isClosed(); i++) await sleep(100);
+    await chat.bringToFront();
+    parts = await askParts();
+    if (parts && parts.cancel) await clickNode(parts.cancel);
+    await sleep(500);
+    if (sent.file !== before) throw new Error('файл ушёл на сайт, хотя выбор отменён');
+
+    return { shots, prompt: sent.prompt, message: S.message, panelText, echoChecks, copyText };
   } finally {
     await browser.close();
   }

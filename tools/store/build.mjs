@@ -22,7 +22,7 @@ const TEXT = {
     shots: [
       ['panel', 'See exactly what the model will get', 'Personal data becomes labels before the message leaves your computer'],
       ['answer', 'The answer comes back with your real data', 'Labels are swapped back only on your screen'],
-      ['file', 'Attached files are cleaned too', 'Text, PDF, Word, Excel and PowerPoint go out as a copy with labels'],
+      ['copy', 'Files go out with the data covered', 'PDF, Word, Excel, PowerPoint and images. See the clean copy before it is sent'],
       ['log', 'Every request stays in the log', 'The exact text that was sent, with its SHA-256'],
       ['echo', 'Don’t trust us, test it', 'A sample goes to an independent echo server and you see what arrived'],
     ],
@@ -32,7 +32,7 @@ const TEXT = {
     shots: [
       ['panel', 'Vedi esattamente cosa riceverà il modello', 'I dati personali diventano etichette prima che il messaggio lasci il computer'],
       ['answer', 'La risposta torna con i tuoi dati reali', 'Le etichette vengono sostituite solo sul tuo schermo'],
-      ['file', 'Anche i file allegati vengono ripuliti', 'Testo, PDF, Word, Excel e PowerPoint partono come copia con le etichette'],
+      ['copy', 'I file partono con i dati coperti', 'PDF, Word, Excel, PowerPoint e immagini. Guarda la copia pulita prima dell’invio'],
       ['log', 'Ogni richiesta resta nel registro', 'Il testo esatto che è partito, con il suo SHA-256'],
       ['echo', 'Non fidarti, mettici alla prova', 'Un esempio va a un server eco indipendente e vedi cosa è arrivato'],
     ],
@@ -42,7 +42,7 @@ const TEXT = {
     shots: [
       ['panel', 'Видно, что именно получит модель', 'Личные данные становятся метками до того, как сообщение уйдёт с компьютера'],
       ['answer', 'Ответ приходит с настоящими данными', 'Метки заменяются обратно только на вашем экране'],
-      ['file', 'Прикреплённые файлы тоже очищаются', 'Текст, PDF, Word, Excel и PowerPoint уходят копией с метками'],
+      ['copy', 'Файлы уходят с закрытыми данными', 'PDF, Word, Excel, PowerPoint и картинки. Чистую копию видно до отправки'],
       ['log', 'Каждый запрос остаётся в журнале', 'Точный текст, который ушёл, и его SHA-256'],
       ['echo', 'Не верьте на слово, проверьте', 'Пример уходит на независимый эхо-сервер, и видно, что дошло'],
     ],

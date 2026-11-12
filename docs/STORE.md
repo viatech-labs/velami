@@ -56,7 +56,7 @@ the site off removes the permission.
 on and granted the permission (chrome.scripting.registerContentScripts). No code is injected from
 outside the package.
 
-**offscreen.** Runs the bundled name and address recognition model (onnxruntime-web, WebAssembly)
+**offscreen.** Runs the bundled name and address recognition model (onnxruntime-web, WebAssembly),
 reads the text of attached PDF and Office files (bundled pdf.js) and the text on attached images (bundled Tesseract) in an offscreen document, because a service worker cannot run WebAssembly threads. The document is
 created on the first check, answers only the extension's own background process, has no network
 access beyond the extension's files (CSP), and closes itself after 5 minutes without work.
@@ -70,7 +70,9 @@ modify the requests the chat page makes with fetch, XMLHttpRequest and sendBeaco
 no data: it sends the request text to the isolated content script for masking and has no way to read
 the label vault.
 
-**Remote code.** No. All code is in the package. The extension's own code is not minified. The
+**Remote code.** Answer "No, I am not using remote code". The Dashboard shows a justification field
+only for "Yes", so there is nowhere to paste the text below. It is kept for a reviewer's question.
+All code is in the package. The extension's own code is not minified. The
 bundled onnxruntime-web 1.31.1 (MIT), pdf.js 6.5.438 (Apache-2.0) and Tesseract.js 7.0.0 with its core (Apache-2.0) are the unmodified upstream builds, and the model files and Tesseract language data (tessdata_best, Apache-2.0) are data
 with SHA-256 recorded in `tools/model/model.lock.json`. Labels on covered images are drawn with the bundled IBM Plex Mono font (OFL-1.1). The extension pages CSP is
 `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly from the package only) and
@@ -170,7 +172,7 @@ Description:
 
 `npm run store` writes the listing images to `dist/store/<en|it|ru>/`: five screenshots 1280×800
 with a caption (`1-panel.jpg` panel before sending, `2-answer.jpg` answer with real values,
-`3-file.jpg` cleaned file, `4-log.jpg` log, `5-echo.jpg` self-test) and the small promo tile
+`3-copy.jpg` clean copy of a PDF as the site gets it, `4-log.jpg` log, `5-echo.jpg` self-test) and the small promo tile
 `promo-440x280.jpg`. JPEG, because the store does not accept PNG with an alpha channel. Upload each
 language set to its localized listing. The screenshots come from real Chrome with the extension on a
 test copy of the chat page (`tools/brochure/shots.mjs`), all data in them is made up, and the build
