@@ -311,6 +311,8 @@ try {
       await typeText(page, cdp, site, c.message);
       await sleep(1500);
       await shot('2-typed');
+      /* Форма оплаты закрывает поле ввода ещё до отправки и к концу случая может исчезнуть сама. */
+      const wall = (await readText(page)).match(PAYWALL);
       await page.keyboard.press('Enter');
       await waitAnswer(page);
       await shot('3-answer');
@@ -337,7 +339,7 @@ try {
         }
       }
       const clipboard = c.copy ? await copyLast(page, meta) : null;
-      return await finish(c, { dialogText, page, ext, since, sent, handed, sentMessage: true, missing, firstDraft, followup, clipboard, site, name });
+      return await finish(c, { dialogText, page, ext, since, sent, handed, sentMessage: true, missing, firstDraft, followup, clipboard, site, name, wall });
     } finally {
       await page.close().catch(() => {});
     }
@@ -408,7 +410,7 @@ async function draftText(page) {
   }
 }
 
-async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessage, missing = [], firstDraft = '', followup, clipboard, site, name }) {
+async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessage, missing = [], firstDraft = '', followup, clipboard, site, name, wall }) {
   await sleep(1500);
   const pageText = await readText(page);
   if (site) writeFileSync(path.join(out, `${site}-${name}-page.txt`), pageText);
@@ -443,7 +445,7 @@ async function finish(c, { dialogText, page, ext, since, sent, handed, sentMessa
   /* Бесплатный аккаунт упёрся в лимит: модель не ответила, проверять нечего, кроме утечек. */
   const limit = !leaked.length && pageText.match(LIMIT_REACHED);
   if (limit) return { ok: null, skipped: 'у аккаунта кончился лимит сообщений: ' + limit[0], requests: sent.length, labelsSeen };
-  const paywall = !leaked.length && pageText.match(PAYWALL);
+  const paywall = !leaked.length && (pageText.match(PAYWALL) || wall);
   if (paywall) return { ok: null, skipped: 'сайт вместо отправки показал оплату тарифа: ' + paywall[0], requests: sent.length, labelsSeen };
   /* Если ушло сообщение или чистая копия, метки обязаны быть в перехваченном трафике.
      Нет меток: скрипт не видел нужный запрос, и «утечки нет» ничего не доказывает. */
