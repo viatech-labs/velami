@@ -400,6 +400,52 @@ document.getElementById('send').onclick = async () => {
   check('после загрузки файла записи «в обход» нет', () => assert.ok(!afterUpload.some((e) => e.kind === 'coverage'), JSON.stringify(afterUpload.filter((e) => e.kind === 'coverage'))));
   await page.close();
 
+  /* Сайт сам отказался отправлять (ChatGPT, 12/11/2026: «удалите и заново прикрепите файл»):
+     запроса нет, текст остался в поле, само поле сайт перерисовал. Это не отправка в обход, тревоги быть не должно. Поле
+     остаётся под наблюдением: если позже оно опустеет без запроса, который увидел Velami, тревога нужна. */
+  PAGES['https://chat.deepseek.com/refused'] = shell('DeepSeek', textarea, '<button aria-label="Send" id="send">Invia</button> <button id="late">Riprova</button>', `
+document.getElementById('send').onclick = () => {
+  /* Как живой ChatGPT: вместе с ошибкой поле ввода перерисовывается, текст в новом поле тот же. */
+  const ed = document.querySelector('.ed');
+  const next = ed.cloneNode(true);
+  next.value = ed.value;
+  ed.replaceWith(next);
+  fail('Per usare un altro modello rimuovi il file e allegalo di nuovo');
+};
+document.getElementById('late').onclick = async () => {
+  const text = read();
+  await fetch('/api/v1/chat/stream', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ payload: text.length }) }).catch(fail);
+};`);
+  page = await open('https://chat.deepseek.com/refused');
+  await page.waitForSelector('[data-pg-gateway]', { timeout: 5000 });
+  await type(page);
+  await page.click('#send');
+  await sleep(7500);
+  const refused = (await ext({ type: 'getLog' })).filter((e) => e.kind === 'coverage' && e.path === '/refused');
+  const kept = await page.$eval('.ed', (e) => e.value);
+  check('сайт отказался отправлять, текст остался в поле: тревоги «в обход» нет', () => {
+    assert.equal(kept, MESSAGE);
+    assert.deepEqual(refused, []);
+  });
+  /* Человек поправил текст в поле: это тоже не отправка. */
+  await page.click('.ed');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Grazie.', { delay: 2 });
+  await sleep(2500);
+  const edited = (await ext({ type: 'getLog' })).filter((e) => e.kind === 'coverage' && e.path === '/refused');
+  check('человек поправил неотправленный текст: тревоги нет', () => assert.deepEqual(edited, []));
+  /* Новая попытка: сайт очистил поле и отправил сообщение путём, которого Velami не знает. */
+  await page.click('#send');
+  await sleep(1500);
+  await page.click('#late');
+  await sleep(7500);
+  const late = (await ext({ type: 'getLog' })).filter((e) => e.kind === 'coverage' && e.path === '/refused');
+  check('после отказа сайт отправил сообщение неизвестным путём: тревога есть', () => {
+    assert.equal(late.length, 1, JSON.stringify(late));
+    assert.ok(late[0].requests.some((r) => r.endsWith('chat.deepseek.com/api/v1/chat/stream')), JSON.stringify(late[0].requests));
+  });
+  await page.close();
+
   /* Сайт сменил способ отправки: сообщение ушло не на путь из sites.js. Velami должен поднять
      тревогу и записать, куда страница ходила, без содержимого запросов. */
   PAGES['https://chat.deepseek.com/moved'] = jsonSite('DeepSeek', '/api/v1/chat/stream', (t) => ({ chat_session_id: '7c1e0b8e-0000-4000-8000-00000000000a', payload: t.length }));

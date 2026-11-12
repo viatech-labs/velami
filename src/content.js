@@ -282,10 +282,8 @@
   let previewSeq = 0;
   let modelRetry = 0;
 
-  const composerText = () => {
-    if (!composer || !composer.isConnected) return '';
-    return composer.tagName === 'TEXTAREA' ? composer.value : composer.innerText;
-  };
+  const fieldText = (el) => (!el || !el.isConnected ? '' : el.tagName === 'TEXTAREA' ? el.value : el.innerText);
+  const composerText = () => fieldText(composer);
 
   function schedulePreview() {
     modelRetry = 0;
@@ -342,6 +340,7 @@
     const el = e.target && e.target.closest ? e.target.closest(EDITABLE) : null;
     if (!el || host.contains(el)) return;
     composer = el;
+    if (e.isTrusted && attempt && attempt.field === el) attempt.typed = fieldText(el).trim();
     schedulePreview();
   }, true);
 
@@ -369,23 +368,50 @@
   let uploadsActive = 0;
   let uploadEndedAt = 0;
   let expectTimer = null;
+  /* Попытка отправки: поле, его текст в момент нажатия и то, что пользователь набрал в нём после. */
+  let attempt = null;
   function expectSend() {
     const text = composerText().trim();
     if (!enabled || !text) return;
     send({ type: 'noteInput', text }).catch(() => {});
     clearTimeout(expectTimer);
     const t0 = performance.now();
+    const mine = attempt = { field: composer, text, typed: null, gone: false };
     const check = () => {
       const waited = performance.now() - t0;
       if (waited < UPLOAD_WAIT && (uploadsActive > 0 || Date.now() - uploadEndedAt < 2500)) {
         expectTimer = setTimeout(check, 1000);
         return;
       }
+      /* Настоящая отправка очищает поле ввода. Пока в том же поле лежит тот же текст, сайт сообщение
+         не отправил: показал свою ошибку, выбрал по Enter пункт меню, ждёт подтверждения. Тревоги
+         нет, но поле остаётся под наблюдением: если оно опустеет без запроса, который увидел шлюз,
+         сообщение ушло мимо. Текст, который человек сам поправил или стёр, отправкой не считается. */
+      /* Сайт мог перерисовать поле (ChatGPT после своей ошибки): ищем поле с тем же текстом заново. */
+      if (!mine.field.isConnected) {
+        const again = [...document.querySelectorAll(EDITABLE)].find((el) => !host.contains(el) && fieldText(el).trim() === text);
+        if (again) mine.field = again;
+      }
+      const now = mine.field.isConnected ? fieldText(mine.field).trim() : null;
+      if (!mine.gone && now === text) {
+        if (waited < UPLOAD_WAIT) expectTimer = setTimeout(check, 1000);
+        return;
+      }
+      if (!mine.gone && now !== null && now === mine.typed) return;
       raise('bad', 'pill.coverage', tr('status.coverage'));
       send({ type: 'log', entry: { kind: 'coverage', host: location.host, path: location.pathname, note: tr('status.coverageNote'), requests: requestsSince(t0) } }).catch(() => {});
     };
     expectTimer = setTimeout(check, SEND_WAIT);
   }
+  /* Человек начал печатать, а в поле уже не то, что он отправлял и не то, что набрал после:
+     поле очистил сайт, значит сообщение он отправил. */
+  document.addEventListener('beforeinput', (e) => {
+    if (!e.isTrusted || !attempt || attempt.gone) return;
+    const el = e.target && e.target.closest ? e.target.closest(EDITABLE) : null;
+    if (el !== attempt.field) return;
+    const now = fieldText(el).trim();
+    if (now !== attempt.text && now !== attempt.typed) attempt.gone = true;
+  }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
     const el = e.target && e.target.closest ? e.target.closest(EDITABLE) : null;
@@ -404,6 +430,7 @@
       if (!uploadsActive) uploadEndedAt = Date.now();
     } else if (ev.event === 'sent') {
       clearTimeout(expectTimer);
+      attempt = null;
       if (alert && alert.pill === 'pill.coverage') alert = null;
       const s = ev.summary || { count: 0, byType: {}, recheck: 0 };
       const types = typesText(s);
