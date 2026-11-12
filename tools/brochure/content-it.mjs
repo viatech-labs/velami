@@ -109,7 +109,7 @@ export function brochureHtml({ version, date, prompt, message }) {
     page('', `
       <p class="eyebrow">Cosa nasconde</p>
       <h2>Ogni tipo di dato ha il suo metodo.</h2>
-      <p class="intro">Dove esiste una cifra di controllo, Velami la verifica, così un numero qualsiasi non viene scambiato per una carta. Un numero con un errore di battitura nella cifra di controllo viene nascosto comunque, se è indicato cos’è: «IBAN», «carta», «codice fiscale». I numeri senza controllo vengono nascosti solo quando il testo dice cosa sono. Nomi e indirizzi li trova il modello locale, aiutato da regole.</p>
+      <p class="intro">Dove esiste una cifra di controllo, Velami la verifica, così un numero qualsiasi non viene scambiato per una carta. I numeri senza controllo, o con un errore di battitura nel controllo, vengono nascosti quando il testo dice cosa sono. Nomi e indirizzi li trova il modello locale, aiutato da regole.</p>
       <table class="types">
         <thead><tr><th>Dato</th><th>Esempio</th><th>Come lo riconosce</th></tr></thead>
         <tbody>
