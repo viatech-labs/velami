@@ -40,6 +40,9 @@ address recognition model is bundled in the extension and runs locally.
 Russian SNILS, phone numbers, e-mail, IP addresses, API keys (OpenAI, Anthropic, GitHub, GitLab,
 AWS, Slack, Google, JWT, PEM), passwords after `password:`.
 
+A number that fails its checksum (a typo, a character misread on a scan) is still hidden when the
+text names it (IBAN, card, codice fiscale, P.IVA, INN, SNILS) or when its shape leaves no doubt.
+
 **By context, next to a word that names the number:** Russian INN, Italian partita IVA, passports
 and identity cards (RU, IT), health insurance numbers, date of birth, car plates.
 

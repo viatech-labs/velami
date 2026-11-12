@@ -109,7 +109,7 @@ export function brochureHtml({ version, date, prompt, message }) {
     page('', `
       <p class="eyebrow">Cosa nasconde</p>
       <h2>Ogni tipo di dato ha il suo metodo.</h2>
-      <p class="intro">Dove esiste una cifra di controllo, Velami la verifica, così un numero qualsiasi non viene scambiato per una carta. I numeri senza controllo vengono nascosti solo quando il testo dice cosa sono. Nomi e indirizzi li trova il modello locale, aiutato da regole.</p>
+      <p class="intro">Dove esiste una cifra di controllo, Velami la verifica, così un numero qualsiasi non viene scambiato per una carta. Un numero con un errore di battitura nella cifra di controllo viene nascosto comunque, se è indicato cos’è: «IBAN», «carta», «codice fiscale». I numeri senza controllo vengono nascosti solo quando il testo dice cosa sono. Nomi e indirizzi li trova il modello locale, aiutato da regole.</p>
       <table class="types">
         <thead><tr><th>Dato</th><th>Esempio</th><th>Come lo riconosce</th></tr></thead>
         <tbody>
@@ -120,7 +120,7 @@ export function brochureHtml({ version, date, prompt, message }) {
           <tr><td>E-mail, telefono, IP</td><td class="mono">+39 347 123 4567</td><td>Formato</td></tr>
           <tr><td>Chiavi e password</td><td class="mono">sk-proj-…, ghp_…, AKIA…</td><td>Formati di OpenAI, Anthropic, GitHub, GitLab, AWS, Slack, Google, JWT, chiavi PEM, e ciò che segue «password:»</td></tr>
           <tr class="grp"><td colspan="3">Quando il testo dice cos’è</td></tr>
-          <tr><td>Partita IVA</td><td class="mono">P.IVA 01234567897</td><td>Vicino a «P.IVA», con cifra di controllo</td></tr>
+          <tr><td>Partita IVA</td><td class="mono">P.IVA 01234567897</td><td>Vicino a «P.IVA»</td></tr>
           <tr><td>Passaporto, carta d’identità</td><td class="mono">YA1234567, CA12345AB</td><td>Vicino a «passaporto», «carta d’identità»</td></tr>
           <tr><td>Data di nascita</td><td class="mono">nato il 12/03/1985</td><td>Vicino a «nato», «data di nascita». Le altre date restano</td></tr>
           <tr><td>Targa</td><td class="mono">targa AB 123 CD</td><td>Vicino a «targa». Codici prodotto e numeri d’ordine restano</td></tr>

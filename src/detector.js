@@ -111,6 +111,28 @@
 
   const contextBefore = (text, start, re, span = 40) => re.test(text.slice(Math.max(0, start - span), start));
 
+  /* Номер с ошибкой в контрольной цифре остаётся чьим-то номером: человек опечатался в одном знаке
+     или распознавание текста на скане спутало символ. Контрольная цифра нужна, чтобы не принять за
+     номер случайное число. Когда рядом написано, что это за номер, или сам вид номера однозначен,
+     он скрывается и без неё. Подсказка должна быть отдельным словом, а не частью другого. */
+  const word = (source) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?![\\p{L}\\p{N}])`, 'iu');
+  const IBAN_HINT = word('iban|conto(?:\\s+corrente)?|c\\/c|bonifico|bank\\s+account|account\\s+(?:number|no\\.?)|сч[её]т[аеу]?|р\\/с');
+  const CARD_HINT = word('cart[ae]|cards?|карт[аеуыой]{1,2}|visa|mastercard|maestro|amex|american\\s+express');
+  const PIVA_HINT = word('p\\.?\\s?iva|partita\\s+iva|vat(?:\\s+(?:number|no\\.?|id))?|codice\\s+fiscale|c\\.\\s?f\\.');
+  const INN_HINT = word('инн');
+
+  /* Длина IBAN по странам (реестр SWIFT). По ней номер с несошедшейся суммой отделяется от соседнего текста. */
+  const IBAN_LENGTH = {
+    AD: 24, AE: 23, AL: 28, AT: 20, AZ: 28, BA: 20, BE: 16, BG: 22, BH: 22, BR: 29, BY: 28, CH: 21, CR: 22, CY: 28,
+    CZ: 24, DE: 22, DK: 18, DO: 28, EE: 20, EG: 29, ES: 24, FI: 18, FO: 18, FR: 27, GB: 22, GE: 22, GI: 23, GL: 18,
+    GR: 27, GT: 28, HR: 21, HU: 28, IE: 22, IL: 23, IQ: 23, IS: 26, IT: 27, JO: 30, KW: 30, KZ: 20, LB: 28, LC: 32,
+    LI: 21, LT: 20, LU: 20, LV: 21, MC: 27, MD: 24, ME: 22, MK: 19, MR: 27, MT: 31, MU: 30, NL: 18, NO: 15, PK: 24,
+    PL: 28, PS: 29, PT: 25, QA: 29, RO: 24, RS: 22, SA: 24, SC: 31, SE: 24, SI: 19, SK: 24, SM: 27, ST: 25, SV: 28,
+    TL: 23, TN: 24, TR: 26, UA: 29, VA: 22, VG: 24, XK: 20,
+  };
+  /* Обычная запись IBAN: заглавные буквы, слитно или группами по четыре, в счёте больше цифр, чем букв. */
+  const IBAN_USUAL = /^[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4})+(?: ?[A-Z0-9]{1,3})?$/;
+
   function refineIban(m) {
     const raw = m[0];
     const pos = [];
@@ -118,12 +140,21 @@
     for (let i = 0; i < raw.length; i++) {
       if (raw[i] !== ' ') { pos.push(i); compact += raw[i].toUpperCase(); }
     }
-    for (let len = Math.min(34, compact.length); len >= 15; len--) {
+    const endsAt = (len) => {
       const end = m.index + pos[len - 1] + 1;
-      if (/[A-Za-z0-9_\-+/=]/.test(m.input[end] || '')) continue;
-      if (ibanValid(compact.slice(0, len))) return { start: m.index, end };
+      return /[A-Za-z0-9_\-+/=]/.test(m.input[end] || '') ? 0 : end;
+    };
+    for (let len = Math.min(34, compact.length); len >= 15; len--) {
+      const end = endsAt(len);
+      if (end && ibanValid(compact.slice(0, len))) return { start: m.index, end };
     }
-    return null;
+    const len = IBAN_LENGTH[compact.slice(0, 2)];
+    if (!len || compact.length < len) return null;
+    const end = endsAt(len);
+    if (!end) return null;
+    const written = raw.slice(0, pos[len - 1] + 1);
+    const usual = IBAN_USUAL.test(written) && digitsOf(compact.slice(4, len)).length * 2 > len - 4;
+    return usual || contextBefore(m.input, m.index, IBAN_HINT) ? { start: m.index, end } : null;
   }
 
   const PIVA_CONTEXT = /(p\.?\s?iva|partita\s+iva|vat|c\.?\s?f\.?|codice\s+fiscale)/i;
@@ -216,25 +247,34 @@
     {
       type: 'CARD',
       re: /(?<![\w\-+/=.])(?:\d[ -]?){12,18}\d(?![\w\-+/=]|\.\d)/g,
-      valid: (v) => {
+      valid: (v, m, text, start) => {
         const d = digitsOf(v);
-        return d.length >= 13 && d.length <= 19 && !/^(\d)\1+$/.test(d) && luhn(d);
+        return d.length >= 13 && d.length <= 19 && !/^(\d)\1+$/.test(d) && (luhn(d) || contextBefore(text, start, CARD_HINT));
       },
     },
     {
+      /* Буквы на месте цифр бывают у однофамильцев (omocodia), но так выглядит и обычное слово: там
+         решает контрольная буква. Код с цифрами на своих местах ни с чем не спутать. */
       type: 'CF',
       re: /\b[A-Z]{6}[0-9LMNP-V]{2}[A-EHLMPR-T][0-9LMNP-V]{2}[A-Z][0-9LMNP-V]{3}[A-Z]\b/gi,
-      valid: cfValid,
+      valid: (v) => cfValid(v) || /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(v),
     },
     { type: 'EMAIL', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g },
-    { type: 'SNILS', re: /(?<!\d)\d{3}-\d{3}-\d{3}[ -]\d{2}(?!\d)/g, valid: (v) => snilsValid(digitsOf(v)) },
-    { type: 'SNILS', re: /(?<!\d)\d{11}(?!\d)/g, context: /снилс/i, valid: snilsValid },
-    { type: 'INN', re: /(?<!\d)(?:\d{12}|\d{10})(?!\d)/g, context: /инн/i, valid: innValid },
+    { type: 'SNILS', re: /(?<!\d)\d{3}-\d{3}-\d{3}[ -]\d{2}(?!\d)/g },
+    { type: 'SNILS', re: /(?<!\d)\d{11}(?!\d)/g, context: /снилс/i },
+    {
+      type: 'INN',
+      re: /(?<!\d)(?:\d{12}|\d{10})(?!\d)/g,
+      context: /инн/i,
+      valid: (v, m, text, start) => innValid(v) || contextBefore(text, start, INN_HINT, 24),
+    },
     {
       type: 'PIVA',
       re: /(?<![\dA-Z])(IT ?)?(\d{11})(?!\d)/gid,
       group: 2,
-      valid: (v, m, text, start) => pivaValid(v) && (!!m[1] || contextBefore(text, m.index, PIVA_CONTEXT, 30)),
+      valid: (v, m, text) => (pivaValid(v)
+        ? !!m[1] || contextBefore(text, m.index, PIVA_CONTEXT, 30)
+        : contextBefore(text, m.index, PIVA_HINT, 30)),
     },
     { type: 'PASSPORT', re: /(?<!\d)\d{2} ?\d{2} ?\d{6}(?!\d)/g, context: /паспорт/i },
     { type: 'PASSPORT', re: /(?<!\d)\d{2} ?\d{7}(?!\d)/g, context: PASSPORT_CONTEXT },
