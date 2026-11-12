@@ -556,8 +556,11 @@ async function dismissPopups(page) {
 
 /* Поле чата стоит ниже всего остального. Выше него бывают редактируемые черновики в ответе
    (письмо у ChatGPT): первое по порядку поле на странице после ответа уже не поле чата. */
+/* Редактируемый черновик внутри ответа (блок письма у ChatGPT, поля письма у Claude) полем ввода
+   не считается: длинный черновик может оказаться на странице ниже самого поля ввода. */
 async function findComposer(page) {
   const h = await page.waitForFunction(() => [...document.querySelectorAll('textarea, [contenteditable="true"], [contenteditable="plaintext-only"]')]
+    .filter((n) => !n.closest('[data-testid="chatgpt-writing-block"], [data-client-defined-widget="writing_block"], [data-testid="assistant-message"], [data-message-author-role="assistant"]'))
     .filter((n) => n.getBoundingClientRect().height > 0 && n.getBoundingClientRect().width > 200)
     .sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0] || null, { timeout: 40000 }).catch(() => null);
   return h && h.asElement();
