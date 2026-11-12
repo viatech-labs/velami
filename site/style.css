@@ -237,6 +237,9 @@ code { font: 500 .84em var(--mono); }
 .doc strong { font-weight: 600; }
 .doc code { padding: 1px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-size: .82em; overflow-wrap: anywhere; }
 .doc-in a:not(.back) { color: var(--accent-text); overflow-wrap: anywhere; }
+.doc-site { margin-top: 44px; padding-top: 36px; border-top: 1px solid var(--line); }
+.doc-site h2 { margin-bottom: 18px; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); letter-spacing: -.025em; }
+.doc-site p { margin: 0 0 16px; }
 
 /* Появление при прокрутке. Класс js ставит demo.js, без скриптов всё видно сразу. */
 .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2, .7, .2, 1); }

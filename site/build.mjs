@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { CONTENT, REPO, DOWNLOAD, MAIL, SITES, OPTIONAL_SITES } from './content.mjs';
+import { CONTENT, REPO, DOWNLOAD, MAIL, CHAT, SITES, OPTIONAL_SITES } from './content.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -131,6 +131,12 @@ function header(t, lang, home = '') {
     <a class="btn btn-sm btn-primary top-cta" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
   </div>
 </header>`;
+}
+
+// Чат поддержки OMNIQ. defer, не async: widget.js добавляет свои узлы в document.body сразу при выполнении.
+// data-lang задаёт язык страницы, иначе виджет возьмёт язык сайта из настроек OMNIQ.
+function chat(lang) {
+  return `<script defer src="${CHAT.script}" data-company-id="${CHAT.companyId}" data-site-id="${CHAT.siteId}" data-lang="${lang}" data-privacy-url="/${lang}/privacy#chat"></script>`;
 }
 
 function footer(t, lang, home = '') {
@@ -370,6 +376,7 @@ ${header(t, lang)}
 ${footer(t, lang)}
 <script src="/detector.js?v=${HASH}"></script>
 <script src="/demo.js?v=${HASH}"></script>
+${chat(lang)}
 </body>
 </html>
 `;
@@ -436,9 +443,14 @@ ${header(t, lang, home)}
     <h1>${esc(CONTENT[lang].privacy.title)}</h1>
     <p class="doc-ver">${inline(ver.split('. Extension')[0])}.</p>
     ${body}
+    <section class="doc-site" id="chat">
+      <h2>${esc(t.privacy.chat.title)}</h2>
+      ${t.privacy.chat.paras.map((p) => `<p>${inline(p)}</p>`).join('\n      ')}
+    </section>
   </div>
 </main>
 ${footer(t, lang, home)}
+${chat(lang)}
 </body>
 </html>
 `;

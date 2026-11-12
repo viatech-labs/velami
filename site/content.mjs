@@ -4,6 +4,14 @@
 export const REPO = 'https://github.com/viatech-labs/velami';
 export const DOWNLOAD = 'https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn';
 export const MAIL = 'support@velami.pro';
+// Чат поддержки: виджет OMNIQ, сайт «Velami» компании via-tech на omniq.pro (AIGW-36).
+// Цвет, приветствие, база знаний помощника и воронка лидов меняются в OMNIQ (Portal, Сайты), без выкладки сайта.
+// Адрес omniq.pro разрешён в site/headers.conf, там же хэш стиля, который добавляет widget.js.
+export const CHAT = {
+  script: 'https://omniq.pro/widget.js',
+  companyId: 'ee78620e-d2c1-4f85-8cf4-6f138a2c4746',
+  siteId: '700f18db-bc29-486c-8378-570ab5b4cebd',
+};
 
 export const CONTENT = {
   en: {
@@ -109,7 +117,19 @@ export const CONTENT = {
       support: 'Support',
       clean: 'This site has no cookies and no trackers.',
     },
-    privacy: { title: 'Privacy policy', back: 'Back to Velami' },
+    privacy: {
+      title: 'Privacy policy',
+      back: 'Back to Velami',
+      chat: {
+        title: 'Chat on this site',
+        paras: [
+          'The policy above is about the extension. The chat in the corner of velami.pro is separate. The first answers come from an automatic assistant. An AI model writes them from what is published on this site, so they can be wrong. Ask for a person at any time and the conversation goes to our team.',
+          'What you write in the chat leaves your computer. The chat is provided by the OMNIQ platform (omniq.pro), with servers in the European Union (Germany). To write an answer, the text of the conversation is sent to an AI model through OpenRouter, a service based in the United States, set to use only providers that do not keep messages and do not train on them.',
+          'Please do not write real personal data in the chat: no card numbers, documents, passwords or keys. The extension does not work on this chat.',
+          'Name and e-mail are optional. If you leave them, we use them to reply and to follow up on your request. The chat script is loaded from omniq.pro when you open a page. It sets no cookies. When you start a conversation, the browser keeps its identifier in session storage until you close the tab. We delete a conversation on request, write to support@velami.pro.',
+        ],
+      },
+    },
     skip: 'Skip to content',
     works: 'Works in',
     stats: [['0', 'servers and accounts of our own'], ['{types}', 'kinds of data it recognises'], ['< 0.5 s', 'to check a short message'], ['{sites}', 'AI chats, {on} right away and {opt} in settings']],
@@ -220,7 +240,19 @@ export const CONTENT = {
       support: 'Assistenza',
       clean: 'Questo sito non usa cookie né tracker.',
     },
-    privacy: { title: 'Informativa privacy', back: 'Torna a Velami' },
+    privacy: {
+      title: 'Informativa privacy',
+      back: 'Torna a Velami',
+      chat: {
+        title: 'Chat su questo sito',
+        paras: [
+          'L’informativa qui sopra riguarda l’estensione. La chat nell’angolo di velami.pro è un’altra cosa. Le prime risposte arrivano da un assistente automatico. Le scrive un modello di IA a partire da ciò che è pubblicato su questo sito, quindi possono contenere errori. Puoi chiedere una persona in qualsiasi momento e la conversazione passa al nostro team.',
+          'Ciò che scrivi nella chat esce dal tuo computer. La chat è fornita dalla piattaforma OMNIQ (omniq.pro), con server nell’Unione europea (Germania). Per scrivere una risposta il testo della conversazione viene inviato a un modello di IA tramite OpenRouter, un servizio con sede negli Stati Uniti, impostato per usare solo fornitori che non conservano i messaggi e non li usano per addestrare i modelli.',
+          'Non scrivere dati personali veri nella chat: niente numeri di carta, documenti, password o chiavi. L’estensione non funziona su questa chat.',
+          'Nome ed e-mail sono facoltativi. Se li lasci, li usiamo per risponderti e per dare seguito alla tua richiesta. Lo script della chat viene caricato da omniq.pro quando apri una pagina. Non imposta cookie. Quando avvii una conversazione, il browser ne conserva l’identificativo nella memoria di sessione finché non chiudi la scheda. Cancelliamo una conversazione su richiesta, scrivi a support@velami.pro.',
+        ],
+      },
+    },
     skip: 'Vai al contenuto',
     works: 'Funziona su',
     stats: [['0', 'server e account nostri'], ['{types}', 'tipi di dati riconosciuti'], ['< 0,5 s', 'per controllare un messaggio breve'], ['{sites}', 'chat IA, {on} subito e {opt} nelle impostazioni']],
@@ -331,7 +363,19 @@ export const CONTENT = {
       support: 'Поддержка',
       clean: 'На этом сайте нет cookies и трекеров.',
     },
-    privacy: { title: 'Политика конфиденциальности', back: 'Вернуться к Velami' },
+    privacy: {
+      title: 'Политика конфиденциальности',
+      back: 'Вернуться к Velami',
+      chat: {
+        title: 'Чат на этом сайте',
+        paras: [
+          'Политика выше относится к расширению. Чат в углу velami.pro работает отдельно. Сначала отвечает автоматический помощник. Ответы пишет модель ИИ по тому, что опубликовано на этом сайте, поэтому в них могут быть ошибки. В любой момент можно попросить человека, и разговор перейдёт к нашей команде.',
+          'То, что вы пишете в чат, уходит с вашего компьютера. Чат работает на платформе OMNIQ (omniq.pro), серверы находятся в Европейском союзе (Германия). Чтобы написать ответ, текст разговора отправляется модели ИИ через OpenRouter, сервис из США, с настройкой использовать только провайдеров, которые не хранят сообщения и не обучаются на них.',
+          'Пожалуйста, не пишите в чат настоящие личные данные: номера карт, документы, пароли и ключи. Расширение в этом чате не работает.',
+          'Имя и e-mail указывать необязательно. Если вы их оставили, мы используем их, чтобы ответить и вернуться к вашему вопросу. Скрипт чата загружается с omniq.pro, когда вы открываете страницу. Cookies он не ставит. Когда вы начинаете разговор, браузер хранит его идентификатор в памяти сессии, пока вы не закроете вкладку. Разговор удалим по запросу, напишите на support@velami.pro.',
+        ],
+      },
+    },
     skip: 'К содержанию',
     works: 'Работает в',
     stats: [['0', 'своих серверов и учётных записей'], ['{types}', 'видов данных распознаётся'], ['< 0,5 с', 'на проверку короткого сообщения'], ['{sites}', 'ИИ-чатов, {on} сразу и {opt} в настройках']],
