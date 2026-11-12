@@ -613,6 +613,9 @@ async function waitAnswer(page) {
 async function copyLast(page, meta) {
   await browser.defaultBrowserContext().overridePermissions(new URL(meta.url).origin, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
   await page.bringToFront();
+  /* Буфер читается только из окна в фокусе. Если в это время на компьютере работают в другом окне,
+     Chrome отказывает: вкладка считается активной независимо от того, какое окно сверху. */
+  await page._client().send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
   await page.evaluate(() => navigator.clipboard.writeText('-')).catch(() => {});
   let btns = await page.$$('[data-testid="copy-turn-action-button"], [data-testid="action-bar-copy"], button[aria-label^="Copy" i], button[aria-label^="Copia" i], button[aria-label^="Копировать" i], button[aria-label^="Скопировать" i], button[aria-label^="Копіювати" i], button[aria-label^="Скопіювати" i]');
   const shown = async (list) => {
