@@ -1,6 +1,6 @@
 {
   "name": "velami",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Chrome extension that hides personal data before it reaches AI chats and restores it in the answers",
   "license": "AGPL-3.0-only",

@@ -63,3 +63,30 @@ test('сверка находит подменённый файл в устан�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/* Chrome Web Store отклонил 0.1.2 за «код, размещённый на удалённых серверах»: в сборках Tesseract.js
+   были адреса cdn.jsdelivr.net по умолчанию, хотя расширение ими не пользовалось (AIGW-37).
+   Проверка магазина смотрит на строки в коде, поэтому в пакете не должно быть ни одного адреса,
+   кроме перечисленных: сайты чатов, самопроверка, ссылки на разработчика и адреса-идентификаторы
+   форматов (пространства имён XML, текст лицензии), с которых ничего не загружается. */
+test('в коде пакета нет внешних адресов, кроме известных', () => {
+  const manifest = JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  const chats = [...manifest.host_permissions, ...manifest.optional_host_permissions].map((o) => new URL(o.replace('/*', '/')).host);
+  const allowed = new Set([...chats, 'httpbin.org', 'velami.pro', 'via-tech.org', 'github.com',
+    // Идентификаторы форматов в pdf.js и строки в библиотеках, это не адреса загрузки.
+    'www.w3.org', 'ns.adobe.com', 'www.xfa.org', 'www.apache.org', 'web.dev', 'example.com', 'foo.bar']);
+  const found = [];
+  // Адреса раздачи библиотек не должны встречаться нигде, даже в тексте лицензий.
+  for (const f of listFiles(root).filter((n) => /\.(js|mjs|html|json|css|txt)$/.test(n))) {
+    assert.ok(!/jsdelivr|unpkg\.com|cdnjs|googleapis\.com/i.test(readFileSync(path.join(root, f), 'utf8')), `${f}: адрес CDN`);
+  }
+  for (const f of listFiles(root).filter((n) => /\.(js|mjs|html|json|css)$/.test(n))) {
+    const text = readFileSync(path.join(root, f), 'utf8');
+    for (const m of text.matchAll(/(?:https?|wss?):\/\/([A-Za-z0-9.-]+\.[a-z]{2,})/g)) if (!allowed.has(m[1].toLowerCase())) found.push(`${f}: ${m[0]}`);
+    if (/\.(js|mjs)$/.test(f) && /^vendor\/tesseract\//.test(f)) {
+      assert.ok(!/new Function\(|\beval\(/.test(text), `${f}: выполнение строки как кода`);
+      assert.ok(!/Blob\(\[['"]importScripts/.test(text), `${f}: воркер из blob с importScripts`);
+    }
+  }
+  assert.deepEqual([...new Set(found)], []);
+});

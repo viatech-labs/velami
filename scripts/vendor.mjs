@@ -68,7 +68,44 @@ const coreVersion = version('tesseract.js-core');
 const tessDst = path.join(root, 'vendor/tesseract');
 rmSync(tessDst, { recursive: true, force: true });
 mkdirSync(path.join(tessDst, 'lang'), { recursive: true });
-for (const f of ['tesseract.min.js', 'worker.min.js']) copyFileSync(path.join(root, 'node_modules/tesseract.js/dist', f), path.join(tessDst, f));
+/* В сборках Tesseract.js зашиты адреса по умолчанию на cdn.jsdelivr.net: откуда брать воркер, ядро и
+   модели языков, если путь не задан. Расширение всегда задаёт пути на свои файлы (src/offscreen.js),
+   но Chrome Web Store считает сами строки удалённым кодом и отклоняет пакет (отказ 0.1.2, AIGW-37).
+   Здесь эти адреса вырезаются. Каждый фрагмент обязан встретиться ровно один раз: при смене версии
+   tesseract.js подготовка упадёт, и правку придётся сверить заново. */
+const TESS_PATCH = {
+  'tesseract.min.js': [
+    // Адрес воркера по умолчанию.
+    ['workerPath:"https://cdn.jsdelivr.net/npm/tesseract.js@v".concat(c,"/dist/worker.min.js")', 'workerPath:""'],
+    // Воркер из blob с importScripts(адрес): расширение запускает воркер прямо из своего файла.
+    ['if(Blob&&URL&&n){var o=new Blob([\'importScripts("\'.concat(e,\'");\')],{type:"application/javascript"});r=new Worker(URL.createObjectURL(o))}else r=new Worker(e);', 'r=new Worker(e);'],
+  ],
+  'worker.min.js': [
+    // Адрес моделей языков по умолчанию.
+    ['b=s||"https://cdn.jsdelivr.net/npm/@tesseract.js-data/".concat(i,m?"/4.0.0_best_int":"/4.0.0")', 'b=s||""'],
+    // Адрес ядра по умолчанию.
+    ['c=o||"https://cdn.jsdelivr.net/npm/tesseract.js-core@v".concat(h.substring(1))', 'c=o||""'],
+    // Запасной способ найти глобальный объект через выполнение строки: в Chrome 116+ есть globalThis.
+    ['new Function("return this")()', 'globalThis'],
+  ],
+};
+const TESS_NOTICE = '/* Modified by Via-Tech for Velami: default CDN addresses and the blob worker loader are removed, see scripts/vendor.mjs. */\n';
+for (const [f, pairs] of Object.entries(TESS_PATCH)) {
+  let code = readFileSync(path.join(root, 'node_modules/tesseract.js/dist', f), 'utf8');
+  for (const [from, to] of pairs) {
+    const n = code.split(from).length - 1;
+    if (n !== 1) {
+      console.error(`tesseract.js/dist/${f}: фрагмент найден ${n} раз, ожидается 1:\n  ${from}`);
+      process.exit(1);
+    }
+    code = code.replace(from, () => to);
+  }
+  if (/https?:\/\//.test(code) || /new Function\(|\beval\(/.test(code)) {
+    console.error(`tesseract.js/dist/${f}: после правки остался адрес или выполнение строки`);
+    process.exit(1);
+  }
+  writeFileSync(path.join(tessDst, f), TESS_NOTICE + code);
+}
 copyFileSync(path.join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js'), path.join(tessDst, 'tesseract-core-simd-lstm.wasm.js'));
 const LANGS = ['eng', 'ita', 'rus'];
 for (const l of LANGS) {
@@ -79,6 +116,11 @@ writeFileSync(path.join(tessDst, 'LICENSE.txt'), [
   `Tesseract.js ${tessVersion}, https://github.com/naptha/tesseract.js`,
   `Tesseract.js-core ${coreVersion}, https://github.com/naptha/tesseract.js-core (Tesseract OCR, Leptonica)`,
   `Language data ${LANGS.join(', ')}: tessdata_best, https://github.com/tesseract-ocr/tessdata_best`,
+  '',
+  'Changes by Via-Tech: in tesseract.min.js and worker.min.js the default CDN addresses of the',
+  'worker, the core and the language data, the blob worker loader and the "new Function" global lookup are',
+  'removed. The extension loads all of them from its own package. The exact replacements are in',
+  'scripts/vendor.mjs of https://github.com/viatech-labs/velami. The core and the language data are unmodified.',
   '',
   readFileSync(path.join(root, 'node_modules/tesseract.js/LICENSE.md'), 'utf8'),
   readFileSync(path.join(root, 'node_modules/tesseract.js-core/LICENSE'), 'utf8'),
