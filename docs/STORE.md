@@ -70,8 +70,11 @@ modify the requests the chat page makes with fetch, XMLHttpRequest and sendBeaco
 no data: it sends the request text to the isolated content script for masking and has no way to read
 the label vault.
 
-**Remote code.** Answer "No, I am not using remote code". The Dashboard shows a justification field
-only for "Yes", so there is nowhere to paste the text below. It is kept for a reviewer's question.
+**Remote code.** Nothing to fill in. The Privacy tab of this item has no question about remote code
+(seen on 13 November 2026: single purpose, permission justifications, data usage and the policy URL),
+so the text below is not pasted anywhere. It is kept for a reviewer's question and for an appeal.
+Version 0.1.2 was rejected for "remotely hosted code" because of address strings in the bundled
+Tesseract.js, 0.1.3 without them was accepted.
 All code is in the package. The extension's own code is not minified. The
 bundled onnxruntime-web 1.31.1 (MIT) and pdf.js 6.5.438 (Apache-2.0) are the unmodified upstream builds. Tesseract.js 7.0.0 (Apache-2.0) is the upstream build with its default cdn.jsdelivr.net addresses (worker, core, language data), the blob worker loader and a `new Function` fallback removed by `scripts/vendor.mjs`: the extension loads the worker, the core and the language data only from the package (`src/offscreen.js`), and the Tesseract core is unmodified. A test (`test/package.test.mjs`) fails if any address outside the chat sites, httpbin.org and the developer's links appears in the package code. The model files and Tesseract language data (tessdata_best, Apache-2.0) are data
 with SHA-256 recorded in `tools/model/model.lock.json`. Labels on covered images are drawn with the bundled IBM Plex Mono font (OFL-1.1). The extension pages CSP is
