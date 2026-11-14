@@ -1,6 +1,21 @@
 const send = (msg) => chrome.runtime.sendMessage(msg);
 const $ = (id) => document.getElementById(id);
 const t = (key, params) => I18N.t(key, params);
+const RELEASES = 'https://github.com/viatech-labs/velami/releases';
+const VERSION = chrome.runtime.getManifest().version;
+
+/* Вкладка, с которой открыли окно, на которой Velami должен работать, но не отвечает: её открыли до
+   установки или обновления расширения, и поможет только перезагрузка. Адрес вкладки расширение видит
+   лишь там, где у него есть разрешение, то есть на чатах. ?tab=<id> задаёт вкладку явно, когда окно
+   открыто как страница (так его открывает тест). */
+let staleTabId = null;
+async function findStaleTab() {
+  const forced = Number(new URLSearchParams(location.search).get('tab'));
+  const tab = forced ? await chrome.tabs.get(forced).catch(() => null) : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  if (!tab || !tab.id || tab.status !== 'complete' || !/^https:\/\//.test(tab.url || '')) return null;
+  const r = await chrome.tabs.sendMessage(tab.id, { type: 'ping' }).catch(() => null);
+  return r && r.ok ? null : tab.id;
+}
 
 async function render() {
   const s = await send({ type: 'state' });
@@ -12,7 +27,7 @@ async function render() {
   $('s-requests').textContent = st.requests;
   $('s-alerts').textContent = alerts;
   $('stat-alerts').classList.toggle('hot', alerts > 0);
-  $('version').textContent = t('brand.version', { v: chrome.runtime.getManifest().version });
+  $('version').textContent = t('brand.version', { v: VERSION });
   $('enabled').checked = s.settings.enabled;
   $('rehydrate').checked = s.settings.rehydrate;
   const m = s.model || {};
@@ -23,6 +38,15 @@ async function render() {
     : m.state === 'error' ? t('model.error', { error: m.error })
     : t('model.' + (m.state || 'idle'));
   $('language').value = s.settings.language || 'auto';
+
+  const note = s.updated && s.updated.version === VERSION;
+  $('updated').hidden = !note;
+  if (note) {
+    $('updated-title').textContent = t('popup.updated', { v: VERSION });
+    const text = I18N.MESSAGES.en['whatsnew.' + VERSION] ? t('whatsnew.' + VERSION) : '';
+    $('updated-text').textContent = text;
+    $('updated-text').hidden = !text;
+  }
 
   const p = s.policy || {};
   const locked = p.locked || {};
@@ -62,5 +86,9 @@ document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('clic
   chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html#' + b.dataset.open) });
   window.close();
 }));
+$('updated-notes').addEventListener('click', () => { chrome.tabs.create({ url: RELEASES }); window.close(); });
+$('updated-ok').addEventListener('click', () => send({ type: 'ackUpdate' }).then(render));
+$('stale-reload').addEventListener('click', () => { if (staleTabId) chrome.tabs.reload(staleTabId).then(() => window.close(), () => {}); });
 
 render();
+findStaleTab().then((id) => { staleTabId = id; $('stale').hidden = !id; }, () => {});

@@ -74,9 +74,9 @@
 
   /* Строки, которые страница показывает сама (ошибка fetch, запись в журнал). Язык присылает расширение. */
   const TEXT = {
-    en: { noReply: 'the extension is not responding', timeout: 'the extension did not reply in time', blocked: 'Velami stopped the message: {reason}. Reload the page.', unchecked: 'File or binary data. Not checked in this version.', dropped: 'Typing suggestions were not sent: the site sends the text letter by letter, before it can be checked.' },
-    it: { noReply: 'l’estensione non risponde', timeout: 'l’estensione non ha risposto in tempo', blocked: 'Velami ha bloccato l’invio: {reason}. Ricarica la pagina.', unchecked: 'File o dati binari. In questa versione non vengono controllati.', dropped: 'I suggerimenti durante la scrittura non sono stati inviati: il sito manda il testo lettera per lettera, prima che si possa controllarlo.' },
-    ru: { noReply: 'расширение не отвечает', timeout: 'расширение не ответило вовремя', blocked: 'Velami остановил отправку: {reason}. Перезагрузите страницу.', unchecked: 'Файл или двоичные данные. В этой версии не проверяются.', dropped: 'Подсказки при наборе не отправлены: сайт шлёт текст по буквам, раньше, чем его можно проверить.' },
+    en: { noReply: 'the extension is not responding', timeout: 'the extension did not reply in time', lost: 'it was updated or restarted', blocked: 'Velami stopped the message: {reason}. Reload the page.', unchecked: 'File or binary data. Not checked in this version.', dropped: 'Typing suggestions were not sent: the site sends the text letter by letter, before it can be checked.' },
+    it: { noReply: 'l’estensione non risponde', timeout: 'l’estensione non ha risposto in tempo', lost: 'è stato aggiornato o riavviato', blocked: 'Velami ha bloccato l’invio: {reason}. Ricarica la pagina.', unchecked: 'File o dati binari. In questa versione non vengono controllati.', dropped: 'I suggerimenti durante la scrittura non sono stati inviati: il sito manda il testo lettera per lettera, prima che si possa controllarlo.' },
+    ru: { noReply: 'расширение не отвечает', timeout: 'расширение не ответило вовремя', lost: 'расширение обновилось или было перезапущено', blocked: 'Velami остановил отправку: {reason}. Перезагрузите страницу.', unchecked: 'Файл или двоичные данные. В этой версии не проверяются.', dropped: 'Подсказки при наборе не отправлены: сайт шлёт текст по буквам, раньше, чем его можно проверить.' },
   };
   const navLang = String(navigator.language || '').slice(0, 2).toLowerCase();
   let lang = TEXT[navLang] ? navLang : 'en';
@@ -247,7 +247,8 @@
     const reason = err && err.message ? err.message : String(err);
     emit({ event: 'blocked', path: url.pathname, reason });
     rpc('log', { entry: { kind: 'blocked', host: url.host, path: url.pathname, method, reason } }).catch(() => {});
-    return new TypeError(say('blocked', { reason }));
+    /* Сайт может показать этот текст человеку: вместо «Extension context invalidated» пишем, что случилось. */
+    return new TypeError(say('blocked', { reason: /context invalidated/i.test(reason) ? say('lost') : reason.replace(/\.$/, '') }));
   }
 
   function reportUnchecked(url, method) {

@@ -150,6 +150,7 @@ npm run e2e          # Chrome with the extension on a local copy of chatgpt.com,
 npm run e2e:files    # PDF, Word, Excel, PowerPoint, scans and images
 npm run e2e:sites    # Gemini, Perplexity, Copilot, DeepSeek, Mistral, Grok, WebSocket
 npm run e2e:policy   # organization policy
+npm run e2e:update   # extension update while a chat tab is open
 npm run eval:model   # model precision and recall on test/model-set.json
 npm run build        # dist/velami-<version>.zip with SHA-256 of the zip and every file
 npm run verify -- <folder or zip> [--list dist/velami-<version>.files.json]

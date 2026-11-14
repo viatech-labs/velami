@@ -8,8 +8,23 @@
   const RELAY = new Set(['maskBatch', 'log', 'scan']);
   /* Запросы страницы, на которые отвечает сам изолированный мир. Ни один не возвращает настоящих значений. */
   const LOCAL = { copy: (p) => copyRestored(p), fileChecked: (p) => fileChecked(p) };
-  const send = (msg) => chrome.runtime.sendMessage(msg);
   const tr = (key, params) => I18N.t(key, params);
+
+  /* После обновления, перезапуска или отключения расширения этот скрипт остаётся на странице без связи
+     с ним: любой вызов chrome.runtime падает, пока страницу не перезагрузят. Шлюз в это время ничего
+     не пропускает, а человеку нужно сказать, что случилось и что делать. */
+  const GONE = /context invalidated/i;
+  const MISMATCH = /^(forbidden|unknown message)$/;
+  let lost = false;
+  const alive = () => { try { return !!chrome.runtime.id; } catch { return false; } };
+  function send(msg) {
+    let p;
+    try { p = alive() ? chrome.runtime.sendMessage(msg) : Promise.reject(new Error('Extension context invalidated.')); } catch (e) { p = Promise.reject(e); }
+    return p.catch((e) => {
+      if (!alive() || GONE.test(String(e && e.message))) lostExtension();
+      throw e;
+    });
+  }
 
   let enabled = true;
   let rehydrateOn = true;
@@ -111,6 +126,8 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .status { display: flex; gap: 8px; align-items: flex-start; margin: 0 14px 12px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; }
   .status::before { content: ""; flex: none; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: currentColor; }
+  .status-act { display: block; height: 30px; margin: 8px 0 2px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 500; cursor: pointer; }
+  .status-act:hover { filter: brightness(1.06); }
   .status.ok { background: var(--ok-soft); color: var(--ok-fg); } .status.warn { background: var(--warn-soft); color: var(--warn-fg); } .status.bad { background: var(--bad-soft); color: var(--bad-fg); }
   footer { display: flex; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--line); }
   footer a { padding: 5px 8px; border-radius: 7px; color: var(--link); cursor: pointer; text-decoration: none; font-size: 12.5px; }
@@ -156,7 +173,7 @@
         <ul class="findings" hidden></ul>
       </div>
     </div>
-    <div class="status" hidden></div>
+    <div class="status" hidden><div><span class="status-text"></span><button class="status-act" hidden></button></div></div>
     <footer><a data-open="log" data-i18n="panel.log"></a><a data-open="test" data-i18n="panel.test"></a><a data-open="dict" data-i18n="panel.dict"></a></footer>
   </section>
   <button class="pill">${MARK}<span class="pill-text"></span><span class="dot"></span></button>
@@ -172,6 +189,8 @@
   const findingsEl = $('.findings');
   const modelWaitEl = $('.model-wait');
   const statusEl = $('.status');
+  const statusTextEl = $('.status-text');
+  const statusActEl = $('.status-act');
   const countEl = $('.count');
   const toastEl = $('.toast');
   const tipEl = $('.tip');
@@ -194,22 +213,58 @@
 
   function setPill() {
     pill.className = 'pill';
+    if (lost) { pill.classList.add('bad'); pillText.textContent = tr('pill.reload'); return; }
     if (!enabled) { pill.classList.add('off'); pillText.textContent = tr('pill.off'); return; }
     if (alert) { pill.classList.add(alert.level); pillText.textContent = tr(alert.pill); return; }
     pillText.textContent = tr('pill.on');
   }
 
-  function setStatus(level, text) {
+  /* action: кнопка под текстом, { label, run }. Сообщение о потерянной связи ничем не заменяется:
+     пока страницу не перезагрузят, остальные статусы уже неверны. */
+  let statusAction = null;
+  function setStatus(level, text, action) {
+    if (lost && action !== RELOAD) return;
     statusEl.hidden = !text;
     statusEl.className = 'status ' + (level || '');
-    statusEl.textContent = text || '';
+    statusTextEl.textContent = text || '';
+    statusAction = (text && action) || null;
+    statusActEl.hidden = !statusAction;
+    statusActEl.textContent = statusAction ? tr(statusAction.label) : '';
   }
+  statusActEl.addEventListener('click', () => { if (statusAction) statusAction.run(); });
 
-  function raise(level, pillLabel, text) {
+  function raise(level, pillLabel, text, action) {
+    if (lost && action !== RELOAD) return;
     alert = { level, pill: pillLabel };
-    setStatus(level, text);
+    setStatus(level, text, action);
     setPill();
     card.hidden = false;
+  }
+
+  const RELOAD = { label: 'action.reload', run: () => location.reload() };
+  function lostExtension() {
+    if (lost) return;
+    lost = true;
+    clearInterval(aliveTimer);
+    clearTimeout(expectTimer);
+    toastEl.hidden = true;
+    /* Предпросмотр и ссылки на страницы расширения без связи не работают: остаётся одно сообщение. */
+    $('.body').hidden = true;
+    $('footer').hidden = true;
+    countEl.hidden = true;
+    raise('bad', 'pill.reload', tr('status.lost'), RELOAD);
+  }
+  /* Связь проверяется и без действий человека: сообщение должно появиться до того, как он
+     нажмёт «Отправить». Чтение chrome.runtime.id ничего не отправляет и не будит фоновый процесс. */
+  const aliveTimer = setInterval(() => { if (!document.hidden && !alive()) lostExtension(); }, 2000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !alive()) lostExtension(); });
+
+  /* Причина остановки понятными словами. null значит, что сообщение уже показано (связь потеряна). */
+  function explain(reason) {
+    const text = String((reason && reason.message) || reason || '');
+    if (!alive() || GONE.test(text)) { lostExtension(); return null; }
+    if (MISMATCH.test(text)) return { text: tr('status.mismatch') };
+    return { reason: text };
   }
 
   function renderMasked(text) {
@@ -449,7 +504,8 @@
       setTimeout(schedulePreview, 300);
     } else if (ev.event === 'blocked') {
       clearTimeout(expectTimer);
-      raise('bad', 'pill.blocked', tr('status.blocked', { reason: ev.reason }));
+      const why = explain(ev.reason);
+      if (why) raise('bad', 'pill.blocked', why.text || tr('status.blocked', { reason: why.reason }));
     } else if (ev.event === 'unchecked') {
       raise('warn', 'pill.unchecked', tr('status.unchecked', { host: ev.host }));
     } else if (ev.event === 'masked-other') {
@@ -909,7 +965,10 @@
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-    if (!msg || msg.type !== 'previewGet' || sender.id !== chrome.runtime.id || sender.tab) return false;
+    if (!msg || sender.id !== chrome.runtime.id || sender.tab) return false;
+    /* Всплывающее окно спрашивает, работает ли Velami на этой вкладке. Отвечает только верхний фрейм. */
+    if (msg.type === 'ping') { if (window === window.top) reply({ ok: true }); return false; }
+    if (msg.type !== 'previewGet') return false;
     /* Сообщение приходит во все фреймы вкладки: отвечает только тот, где копия лежит. */
     const p = previews.get(msg.id);
     if (p) reply({ ...p, bytes: undefined, size: p.bytes.length, data: toBase64(p.bytes) });
@@ -1105,7 +1164,8 @@
   }
 
   function fileFailed(name, err) {
-    raise('bad', 'pill.fileFailed', tr('file.failed', { name, reason: (err && err.message) || err }));
+    const why = explain(err);
+    if (why) raise('bad', 'pill.fileFailed', why.text || tr('file.failed', { name, reason: why.reason }));
   }
 
   function transfer(files, from) {

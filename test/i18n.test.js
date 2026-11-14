@@ -59,3 +59,12 @@ test('все ключи из разметки и кода существуют �
     assert.ok(msgs.extName.message && msgs.extDescription.message.length <= 132, lang);
   }
 });
+
+test('для текущей версии есть строка «что нового» на каждом языке', () => {
+  const { version } = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  for (const lang of I18N.SUPPORTED) {
+    const text = I18N.MESSAGES[lang]['whatsnew.' + version];
+    assert.ok(text && text.length >= 40 && text.length <= 260, `${lang}: whatsnew.${version}`);
+    assert.ok(!/[—–;]/.test(text), `${lang}: длинное тире или точка с запятой`);
+  }
+});

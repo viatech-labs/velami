@@ -475,7 +475,10 @@ async function handle(msg, sender) {
       return { ok: true };
     case 'state':
       await modelAvailable();
-      return { settings: s.settings, policy: s.policy, stats: stats(s), vaultSize: s.vault.size, model: { ...model, terms: modelTerms.size } };
+      return { settings: s.settings, policy: s.policy, stats: stats(s), vaultSize: s.vault.size, model: { ...model, terms: modelTerms.size }, updated: (await chrome.storage.local.get('updated')).updated || null };
+    case 'ackUpdate':
+      await chrome.storage.local.remove('updated');
+      return { ok: true };
     case 'modelProbe': {
       const text = String(msg.text || '').slice(0, 20000);
       const t0 = Date.now();
@@ -513,6 +516,12 @@ chrome.runtime.onInstalled.addListener((details) => {
   updateBadge();
   syncSites().catch(() => {});
   if (details.reason === 'install') chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html#welcome') });
+  /* Chrome обновляет расширение молча. Запоминаем, что версия сменилась: всплывающее окно покажет, что
+     нового, пока человек не нажмёт «Понятно». Текст лежит в пакете, в сеть за ним никто не ходит. */
+  const version = chrome.runtime.getManifest().version;
+  if (details.reason === 'update' && details.previousVersion && details.previousVersion !== version) {
+    chrome.storage.local.set({ updated: { version, from: details.previousVersion } }).catch(() => {});
+  }
 });
 chrome.runtime.onStartup.addListener(updateBadge);
 chrome.storage.onChanged.addListener((changes, area) => {

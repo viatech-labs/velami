@@ -28,6 +28,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Атрибут hidden сильнее любого display в правилах ниже: иначе скрытая строка с display: flex остаётся на экране. */
+[hidden] { display: none !important; }
 body { margin: 0; font: 14px/1.45 var(--font); letter-spacing: -.006em; color: var(--fg); background: var(--bg); -webkit-font-smoothing: antialiased; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }

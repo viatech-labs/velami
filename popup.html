@@ -15,6 +15,17 @@
 
   <p class="managed" id="managed" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 10h4a1 1 0 0 1 1 1v10M3 21h18M8 8h3M8 12h3M8 16h3"/></svg><span id="managed-text"></span></p>
 
+  <section class="group note warn" id="stale" hidden>
+    <p data-i18n="popup.stale"></p>
+    <div class="note-actions"><button class="btn primary" id="stale-reload" data-i18n="popup.staleBtn"></button></div>
+  </section>
+
+  <section class="group note" id="updated" hidden>
+    <b id="updated-title"></b>
+    <p id="updated-text"></p>
+    <div class="note-actions"><button class="btn ghost" id="updated-notes" data-i18n="popup.updatedNotes"></button><button class="btn" id="updated-ok" data-i18n="popup.updatedOk"></button></div>
+  </section>
+
   <section class="group status" id="head">
     <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.6 7.5 10 4.4-1.4 7.5-5.4 7.5-10V5.6z" fill="#fff"/><path d="m8.6 12.2 2.4 2.4 4.4-4.8" fill="none" stroke="var(--icon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     <div><b id="title"></b><span id="subtitle"></span></div>

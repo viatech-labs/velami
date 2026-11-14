@@ -25,7 +25,7 @@ Run before opening a pull request:
 
 ```sh
 npm test
-npm run e2e:files && npm run e2e:policy && npm run e2e:sites
+npm run e2e:files && npm run e2e:policy && npm run e2e:update && npm run e2e:sites
 npm run e2e          # needs the model
 ```
 
