@@ -186,5 +186,8 @@ The English README screenshots in `docs/img/` come from the same `tools/brochure
 
 Demo video: `npm run demo -- <unpacked zip>` records real Chrome with the package on a test copy of
 the chat page with made-up data, `dist/demo/velami-demo-ru.mp4` (subtitles burned in and as a
-separate track) and `velami-demo-ru.srt`, `npm run demo:it` for Italian. The real IP from the
-httpbin.org answer never appears on screen.
+separate track) and `velami-demo-ru.srt`, `npm run demo:it` for Italian, `npm run demo:en` for
+English. The real IP from the httpbin.org answer never appears on screen. Add `--short` for the
+one-minute cut (title, the chat scene, end card, `velami-demo-<lang>-short.mp4`): this is the one
+for the store listing, which takes the video as a YouTube link, one per language. The frame is
+16:9, 1920x1080.

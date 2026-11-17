@@ -84,6 +84,7 @@ main{width:800px;margin-left:40px;padding:24px 0 200px}
 .user{background:#f2f2f7;margin-left:120px}.bot{border:1px solid #ececf0}
 .file{margin-left:120px;border:1px dashed #c7c7cc;font:13px/1.6 ui-monospace,"SF Mono",Menlo,monospace}
 .file b{display:block;font:600 12px -apple-system,BlinkMacSystemFont,sans-serif;color:#86868b;margin-bottom:4px}
+.file textarea{display:block;width:100%;margin:0;padding:0;border:0;outline:0;background:none;resize:none;overflow:hidden;font:inherit;color:inherit;pointer-events:none}
 .composer{position:fixed;left:40px;bottom:28px;width:800px;display:flex;gap:10px;align-items:flex-end;padding:12px;border:1px solid #d2d2d7;border-radius:26px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.06)}
 #prompt-textarea{flex:1;min-height:52px;max-height:200px;overflow:auto;outline:none;padding:4px 8px}
 #prompt-textarea:empty:before{content:"${s.ask}";color:#aeaeb2}
@@ -95,10 +96,13 @@ main{width:800px;margin-left:40px;padding:24px 0 200px}
 <div class="composer"><label class="attach" title="${s.attach}">+<input type="file" id="file" hidden></label><div id="prompt-textarea" contenteditable="true"></div><button id="send" data-testid="send-button" aria-label="Send">↑</button></div>
 <script>
 const add = (cls, t, title) => { const d = document.createElement('div'); d.className = 'msg ' + cls; if (title) { const b = document.createElement('b'); b.textContent = title; d.append(b); } d.append(t); document.getElementById('thread').append(d); return d; };
+// Содержимое файла показано в textarea: Velami не возвращает туда настоящие значения, и зритель видит
+// ровно то, что получил сайт. В обычном блоке метки на экране снова стали бы значениями.
+const seen = (text) => { const ta = document.createElement('textarea'); ta.readOnly = true; ta.tabIndex = -1; ta.value = text.trim(); ta.rows = ta.value.split('\\n').length; return ta; };
 document.getElementById('file').onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   const text = await f.text();
-  add('file', text, '${s.fileSeen} «' + f.name + '»');
+  add('file', seen(text), '${s.fileSeen} «' + f.name + '»');
   await fetch('/backend-api/files', { method: 'PUT', body: f });
 };
 document.getElementById('send').onclick = async () => {

@@ -1,6 +1,8 @@
 // Демо-ролик Velami с субтитрами: настоящий Chrome с расширением, копия страницы чата, выдуманные данные.
-// node tools/demo/record.mjs [--lang ru|it] [папка расширения] -> dist/demo/velami-demo-<lang>.mp4 и .srt
-// Нужен ffmpeg с libx264. Субтитры вшиты в кадр и продублированы отдельной дорожкой.
+// node tools/demo/record.mjs [--lang ru|it|en] [--short] [папка расширения] -> dist/demo/velami-demo-<lang>.mp4 и .srt
+// --short оставляет заставку, сцену в чате и финал (около минуты, файл velami-demo-<lang>-short.mp4): для карточки
+// в магазине и для соцсетей. Нужен ffmpeg с libx264. Субтитры вшиты в кадр и продублированы отдельной дорожкой.
+// Кадр 16:9, 1920x1080: магазин берёт ролик ссылкой на YouTube, а тот добавляет к другим пропорциям чёрные поля.
 import puppeteer from 'puppeteer';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,17 +14,22 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const argv = process.argv.slice(2);
 const li = argv.indexOf('--lang');
 const lang = li >= 0 ? argv.splice(li, 2)[1] : 'ru';
-if (!STRINGS[lang]) throw new Error('язык ролика: ru или it');
+const si = argv.indexOf('--short');
+const short = si >= 0;
+if (short) argv.splice(si, 1);
+const LANGS = { ru: 'rus', it: 'ita', en: 'eng' };
+if (!LANGS[lang] || !STRINGS[lang]) throw new Error('язык ролика: ru, it или en');
 const extDir = path.resolve(argv[0] || root);
 const out = path.join(root, 'dist', 'demo');
-const work = path.join(out, 'work-' + lang);
+const tail = short ? '-short' : '';
+const work = path.join(out, 'work-' + lang + tail);
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
 
 const SAY = {
   ru: {
     title: ['Приватные чаты с ИИ', 'Демонстрация на тестовой копии страницы чата. Все данные выдуманы.'],
-    end: ['Без серверов и аккаунтов. Всё остаётся на вашем компьютере.', 'Разработано в Via-Tech · via-tech.org · info@via-tech.org', 'Версия {v}'],
+    end: ['Без серверов и аккаунтов. Всё остаётся на вашем компьютере.', 'velami.pro · разработано в Via-Tech · info@via-tech.org', 'Версия {v}'],
     intro: 'Это Velami, расширение для Chrome. Оно скрывает личные данные до того, как они уйдут в ChatGPT или Claude.',
     type: 'Пишем как обычно: имя, адрес, номер карты и почту.',
     panel: 'Рядом появляется панель «Что увидит модель». Вместо личных данных в ней метки.',
@@ -44,7 +51,7 @@ const SAY = {
   },
   it: {
     title: ['Chat private con l’IA', 'Dimostrazione su una copia di prova della chat. Tutti i dati sono inventati.'],
-    end: ['Nessun server, nessun account. Tutto resta sul tuo computer.', 'Realizzato da Via-Tech · via-tech.org · info@via-tech.org', 'Versione {v}'],
+    end: ['Nessun server, nessun account. Tutto resta sul tuo computer.', 'velami.pro · realizzato da Via-Tech · info@via-tech.org', 'Versione {v}'],
     intro: 'Questo è Velami, un’estensione per Chrome. Nasconde i dati personali prima che arrivino a ChatGPT o Claude.',
     type: 'Scrivi come sempre: nome, indirizzo, carta, IBAN ed e-mail.',
     panel: 'Accanto alla chat compare il pannello “Cosa vedrà il modello”. Al posto dei dati ci sono etichette.',
@@ -64,10 +71,33 @@ const SAY = {
     vault: 'L’associazione tra etichette e valori resta solo in questo browser.',
     verify: 'E qui trovi come verificare tutto da solo, senza fidarti di noi.',
   },
+  en: {
+    title: ['Private AI chats', 'Demo on a test copy of the chat page. All data is made up.'],
+    end: ['No servers, no accounts. Everything stays on your computer.', 'velami.pro · built by Via-Tech · info@via-tech.org', 'Version {v}'],
+    intro: 'This is Velami, a Chrome extension. It hides personal data before it reaches ChatGPT or Claude.',
+    type: 'Write as usual: name, address, card, IBAN and e-mail.',
+    panel: 'The “What the model will see” panel appears next to the chat. Labels stand in for the data.',
+    model: 'The name and address are found by an AI model that runs on your computer. The card, IBAN and e-mail are found by exact rules.',
+    send: 'You send. Only the labels reach the chat.',
+    answer: 'The AI answers with labels and Velami puts the real values back. Only on your screen.',
+    hover: 'Hover over a value to see which label the AI actually received.',
+    file: 'Text files are cleaned too: the site receives a copy with labels.',
+    popup: 'The extension icon shows whether protection is on and how much data was hidden today.',
+    popup2: 'Here you turn on restoring the real values and the local model.',
+    welcome: 'The Start page lists everything Velami hides.',
+    dict: 'In “My dictionary” add what only you know: your company, a client, a project.',
+    dict2: 'From now on that name is hidden in every message.',
+    log: 'The log keeps the exact body of every request and its SHA-256, to compare with DevTools.',
+    test: '“Test it yourself” sends a sample to an independent echo server, httpbin.org.',
+    test2: 'The server received only labels. For each value you can see that it did not arrive.',
+    vault: 'The link between labels and values stays only in this browser.',
+    verify: 'And here is how to verify everything yourself, without taking our word for it.',
+  },
 }[lang];
 const S = STRINGS[lang];
 
 const W = 1280, H = 800, BAND = 120, FPS = 30;
+const WIDE = Math.ceil(((H + BAND) * 16) / 9 / 2) * 2;
 const BG = '#1d1d1f';
 const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -133,7 +163,7 @@ try {
   const ext = (msg) => admin.evaluate((m) => chrome.runtime.sendMessage(m), msg);
   const version = await admin.evaluate(() => chrome.runtime.getManifest().version);
   await ext({ type: 'setSettings', patch: { language: lang, dictionary: [] } });
-  await ext({ type: 'modelProbe', text: lang === 'it' ? 'Ciao, mi chiamo Luca Bianchi.' : 'Привет, меня зовут Иван Петров.' });
+  await ext({ type: 'modelProbe', text: { it: 'Ciao, mi chiamo Luca Bianchi.', en: 'Hi, my name is Emma Collins.', ru: 'Привет, меня зовут Иван Петров.' }[lang] });
 
   const chat = await browser.newPage();
   await light(chat);
@@ -201,7 +231,7 @@ try {
   await popup.goto(`chrome-extension://${extId}/popup.html`);
   await popup.addStyleTag({ content: `html { min-height: 100%; background: #e5e5ea; } body { margin: 34px auto 0; zoom: 1.4; border-radius: 12px; background: var(--bg); box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 24px 60px -12px rgba(0,0,0,.3); overflow: hidden; }` });
   await popup.waitForFunction(() => document.getElementById('version').textContent !== '');
-  const popupClip = await record(popup, '2-popup', async () => {
+  const popupClip = short ? null : await record(popup, '2-popup', async () => {
     await glide(popup, 640, 220, 1);
     await line(SAY.popup);
     await clickOn(popup, '#rehydrate');
@@ -218,7 +248,7 @@ try {
   await dash.addStyleTag({ content: '#echo-ip, #echo-raw, #echo-result details { display: none !important } html { scroll-behavior: smooth; }' });
   await dash.waitForSelector('#hides .hide-group');
   const scrollTo = (sel) => dash.evaluate((s) => document.querySelector(s).scrollIntoView({ behavior: 'smooth', block: 'start' }), sel);
-  const dashClip = await record(dash, '3-dashboard', async () => {
+  const dashClip = short ? null : await record(dash, '3-dashboard', async () => {
     await glide(dash, 700, 300, 1);
     say(SAY.welcome);
     await sleep(1200);
@@ -293,8 +323,10 @@ try {
   const pieces = [
     { file: still(titlePng, 4, '0-title') },
     { file: clip(chatClip, '1-chat'), segment: '1-chat' },
-    { file: clip(popupClip, '2-popup'), segment: '2-popup' },
-    { file: clip(dashClip, '3-dashboard'), segment: '3-dashboard' },
+    ...(short ? [] : [
+      { file: clip(popupClip, '2-popup'), segment: '2-popup' },
+      { file: clip(dashClip, '3-dashboard'), segment: '3-dashboard' },
+    ]),
     { file: still(endPng, 4, '4-end') },
   ];
 
@@ -321,18 +353,20 @@ try {
     inputs.push('-i', await shot(captionHtml(c.text), path.join(work, `cap-${i}.png`), { width: W, height: BAND }));
     graph += `;[v${i}][${i + 1}:v]overlay=0:${H}:enable='between(t,${c.start.toFixed(2)},${c.end.toFixed(2)})'[v${i + 1}]`;
   }
+  // 1080p: при исходнике 920 строк YouTube отдаёт зрителю не больше 720p, и мелкий текст интерфейса мылится.
+  graph += `;[v${timeline.length}]pad=${WIDE}:${H + BAND}:(ow-iw)/2:0:color=${BG},scale=1920:1080:flags=lanczos,setsar=1[out]`;
   const burned = path.join(work, 'burned.mp4');
-  ffmpeg('-i', joined, ...inputs, '-filter_complex', graph, '-map', `[v${timeline.length}]`, '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', burned);
+  ffmpeg('-i', joined, ...inputs, '-filter_complex', graph, '-map', '[out]', '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', burned);
 
   const stamp = (s) => {
     const ms = Math.round(s * 1000);
     const p = (n, l = 2) => String(n).padStart(l, '0');
     return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`;
   };
-  const srt = path.join(out, `velami-demo-${lang}.srt`);
+  const srt = path.join(out, `velami-demo-${lang}${tail}.srt`);
   writeFileSync(srt, timeline.map((c, i) => `${i + 1}\n${stamp(c.start)} --> ${stamp(c.end)}\n${c.text}\n`).join('\n'));
-  const final = path.join(out, `velami-demo-${lang}.mp4`);
-  ffmpeg('-i', burned, '-i', srt, '-map', '0:v', '-map', '1:s', '-c:v', 'copy', '-c:s', 'mov_text', '-metadata:s:s:0', 'language=' + (lang === 'it' ? 'ita' : 'rus'), '-movflags', '+faststart', final);
+  const final = path.join(out, `velami-demo-${lang}${tail}.mp4`);
+  ffmpeg('-i', burned, '-i', srt, '-map', '0:v', '-map', '1:s', '-c:v', 'copy', '-c:s', 'mov_text', '-metadata:s:s:0', 'language=' + LANGS[lang], '-movflags', '+faststart', final);
   console.log(`${final}  ${duration(final).toFixed(1)} s, ${timeline.length} subtitles`);
   console.log(srt);
 } finally {

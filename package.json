@@ -26,6 +26,7 @@
     "eval:model": "node test/model-eval.mjs",
     "demo": "node tools/demo/record.mjs",
     "demo:it": "node tools/demo/record.mjs --lang it",
+  "demo:en": "node tools/demo/record.mjs --lang en",
     "brochure": "node tools/brochure/build.mjs --lang it",
     "brochure:ru": "node tools/brochure/build.mjs --lang ru",
     "store": "node tools/store/build.mjs",
