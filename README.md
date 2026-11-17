@@ -83,7 +83,7 @@ You should not have to trust us. Velami shows what it does:
 ## Install
 
 From the Chrome Web Store:
-[Velami](https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn).
+[Velami](https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn?utm_source=github&utm_medium=readme).
 
 From a release: download `velami-<version>.zip` from
 [Releases](https://github.com/viatech-labs/velami/releases), unzip it, open `chrome://extensions`,

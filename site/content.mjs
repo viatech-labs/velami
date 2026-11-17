@@ -3,6 +3,16 @@
 // В подписях к цифрам (stats) сборка подставляет числа из кода: {types} видов меток, {sites} сайтов, из них {on} сразу и {opt} по выбору.
 export const REPO = 'https://github.com/viatech-labs/velami';
 export const DOWNLOAD = 'https://chromewebstore.google.com/detail/bgbollfnmoffpolhpggejbjdkmelcpcn';
+// Откуда пришли на карточку в магазине, видно только по меткам в ссылке: на сайте счётчиков нет, в расширении аналитики нет.
+// Кабинет разработчика Chrome Web Store показывает просмотры карточки и установки по utm_source, utm_medium, utm_campaign.
+// source: площадка (velami.pro, github, linkedin), medium: вид ссылки (site, readme, post), campaign: страница и язык,
+// content: место кнопки на странице. Метки описывают ссылку, а не человека: ни cookies, ни идентификаторов в них нет.
+export const store = ({ source = 'velami.pro', medium = 'site', campaign, content } = {}) => {
+  const q = new URLSearchParams({ utm_source: source, utm_medium: medium });
+  if (campaign) q.set('utm_campaign', campaign);
+  if (content) q.set('utm_content', content);
+  return `${DOWNLOAD}?${q}`;
+};
 export const MAIL = 'support@velami.pro';
 // Чат поддержки: виджет OMNIQ, сайт «Velami» компании via-tech на omniq.pro (AIGW-36).
 // Цвет, приветствие, база знаний помощника и воронка лидов меняются в OMNIQ (Portal, Сайты), без выкладки сайта.
@@ -381,6 +391,102 @@ export const CONTENT = {
     stats: [['0', 'своих серверов и учётных записей'], ['{types}', 'видов данных распознаётся'], ['< 0,5 с', 'на проверку короткого сообщения'], ['{sites}', 'ИИ-чатов, {on} сразу и {opt} в настройках']],
     tags: { who: 'Сценарии', hides: 'Типы данных', teams: 'Администраторам', faq: 'FAQ' },
     logTitle: 'Velami · журнал',
+  },
+};
+
+// Страница для профессиональных студий: только итальянский, адрес /it/studi (AIGW-42).
+// Обещаний «соответствует GDPR» и слова «анонимизация» здесь нет и быть не должно: Velami уменьшает риск, а не снимает его.
+// Цитата закона дословная (L. 132/2025, art. 13), цифры только из названного источника. Пример текста для клиента помечен
+// как пример: перед тем как менять его, сверяйтесь с тем, что расширение делает на самом деле.
+export const STUDI = {
+  path: 'studi',
+  title: 'Velami per gli studi professionali: l’IA senza i dati dei clienti',
+  description: 'Commercialisti, consulenti del lavoro e avvocati usano ChatGPT ogni giorno. Velami sostituisce codici fiscali, partite IVA, IBAN e nomi con etichette prima dell’invio. Gratuito, open source, funziona sul computer dello studio.',
+  homeLink: 'Lavori in uno studio? Guarda la pagina per gli studi',
+  footer: 'Per gli studi',
+  hero: {
+    tag: 'Per gli studi professionali',
+    title: 'ChatGPT in studio.<br><em>I dati dei clienti restano in studio.</em>',
+    lead: 'Velami sostituisce codici fiscali, partite IVA, IBAN, nomi e recapiti con etichette prima che il messaggio arrivi a ChatGPT, Claude, Gemini o Perplexity. Nella risposta rivedi i valori reali. Funziona sul computer dello studio, senza server e senza account.',
+    pilot: 'Chiedi una prova in studio',
+    note: 'Gratuito e open source. Si installa dal Chrome Web Store in un minuto.',
+  },
+  sample: 'Prepara un sollecito per la fattura n. 214 del 03/10/2026 di 1.830,00 euro. Codice fiscale del cliente RSSMRA85T10A562S, P. IVA 01234567897, mail mario.rossi@example.com, tel. 347 123 4567. Pagamento su IBAN IT60 X054 2811 1010 0000 0123 456.',
+  law: {
+    tag: 'Legge 132/2025',
+    title: 'Dal 10 ottobre 2025 il cliente va informato',
+    lead: 'L’articolo 13 della legge italiana sull’intelligenza artificiale riguarda le professioni intellettuali.',
+    cards: [
+      ['Solo attività di supporto', 'L’IA si usa per le attività strumentali e di supporto. Deve prevalere il lavoro intellettuale del professionista.', 'art. 13, comma 1'],
+      ['Informazioni chiare al cliente', 'Le informazioni sui sistemi di IA usati dal professionista vanno comunicate al cliente “con linguaggio chiaro, semplice ed esaustivo”.', 'art. 13, comma 2'],
+      ['Il modo lo sceglie lo studio', 'La legge non indica un modulo né una scadenza. L’informativa si può inserire nella lettera d’incarico, nel mandato o in un foglio a parte.', 'in vigore dal 10/10/2025'],
+    ],
+    link: 'Leggi l’articolo 13 su Normattiva',
+    url: 'https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:legge:2025-09-23;132~art13',
+  },
+  stats: {
+    items: [['39%', 'degli studi di commercialisti usa IA fuori dal gestionale'], ['42%', 'dei consulenti del lavoro fa lo stesso'], ['36%', 'degli studi legali fa lo stesso'], ['1 su 5', 'ha adeguato la sicurezza dei dati dopo l’arrivo dell’IA. Poco più del 20%']],
+    source: 'Fonte: Osservatorio Professionisti e Innovazione Digitale, Politecnico di Milano, luglio 2026',
+    url: 'https://www.osservatori.net/comunicato/professionisti-e-innovazione-digitale/spesa-tecnologie-digitali-studi-professionali-in-italia/',
+  },
+  how: {
+    tag: 'Come funziona',
+    title: 'Cosa riceve davvero l’IA',
+    lead: 'Lavori come sempre. Velami si mette tra la chat e i dati del cliente.',
+    scene: { msg: 'Scrivi un sollecito per la fattura 214. Codice fiscale del cliente RSSMRA85T10A562S, IBAN IT60 X054 2811 1010 0000 0123 456.', answer: 'Ecco il sollecito per la fattura 214. Il pagamento va fatto sull’IBAN [[IBAN_1]], intestato al cliente con codice fiscale [[CF_1]].' },
+    steps: [
+      ['Scrivi o alleghi come sempre', 'Fatture, buste paga, visure, contratti. Un pannello accanto alla casella mostra cosa riceverà l’IA, prima dell’invio.'],
+      ['I dati diventano etichette', 'Codice fiscale, partita IVA, IBAN, nomi e recapiti diventano etichette come [[CF_1]]. I valori reali restano nel browser.'],
+      ['La risposta torna completa', 'L’IA risponde con le etichette. Velami rimette i dati, solo sullo schermo dello studio. Anche il testo copiato è quello reale.'],
+    ],
+    files: 'Anche PDF, Word, Excel e scansioni',
+  },
+  letter: {
+    tag: 'Informativa al cliente',
+    title: 'Cosa puoi scrivere al cliente',
+    lead: 'Un esempio da adattare. Dice quali strumenti usi, per cosa li usi e cosa esce dallo studio.',
+    label: 'Esempio di testo',
+    paras: [
+      'Lo studio utilizza sistemi di intelligenza artificiale generativa, ad esempio ChatGPT di OpenAI, solo per attività di supporto come la stesura di bozze, la sintesi di documenti e le ricerche preliminari.',
+      'Ogni risultato viene controllato dal professionista, che resta l’unico responsabile della prestazione.',
+      'Prima dell’invio a questi sistemi, i dati che identificano il cliente, come nome, codice fiscale, partita IVA, IBAN e recapiti, vengono sostituiti con etichette da un software che funziona sul computer dello studio (Velami). Il professionista verifica il testo prima di inviarlo.',
+    ],
+    copy: 'Copia il testo',
+    copied: 'Copiato',
+    note: 'È un esempio, non un parere legale. Indica gli strumenti che usi davvero e fai verificare il testo dal tuo Ordine o dal tuo consulente privacy.',
+    cards: [
+      ['Lo puoi dimostrare', 'Il registro di Velami conserva sul computer il testo esatto di ogni invio. Se un cliente chiede cosa è uscito dallo studio, glielo mostri.'],
+      ['Nessun rilevatore trova tutto', 'Controlla il pannello prima di inviare e aggiungi al dizionario i nomi che vuoi sempre nascosti. Velami riduce il rischio, non lo azzera.'],
+    ],
+  },
+  rules: {
+    tag: 'Per tutto lo studio',
+    title: 'Le stesse regole su ogni postazione',
+    lead: 'Nessun server da installare e nessun messaggio raccolto.',
+    cards: [
+      ['Dizionario dello studio', 'Ragioni sociali, nomi dei clienti e codici pratica restano sempre nascosti. Con le impostazioni gestite nessuno può toglierli.'],
+      ['Impostazioni bloccate', 'Chi gestisce i computer dello studio blocca le impostazioni con Google Admin, Intune o Criteri di gruppo. Senza server in più.'],
+      ['Solo copie pulite', 'Puoi permettere solo l’invio di file ripuliti e trattenere quelli che non si possono controllare.'],
+    ],
+    guide: 'Leggi la guida per gli amministratori',
+  },
+  faq: {
+    tag: 'FAQ',
+    title: 'Domande degli studi',
+    items: [
+      ['Velami rende lo studio conforme al GDPR?', 'No. Nessun software lo fa da solo. Velami riduce i dati personali che arrivano al fornitore di IA. Informativa, registro dei trattamenti e scelta dei fornitori restano compito dello studio.'],
+      ['I dati dei clienti passano dai vostri server?', 'No. Velami non ha server né account. Il riconoscimento avviene nel browser, anche per PDF e scansioni.'],
+      ['Serve anche se abbiamo ChatGPT a pagamento?', 'Il piano a pagamento regola cosa fa il fornitore con i dati che riceve. Velami riduce i dati che riceve. Le due cose si sommano.'],
+      ['Quanto costa?', 'Niente. Velami è gratuito e open source con licenza AGPL-3.0. Se lo studio vuole aiuto per l’installazione o una licenza diversa, scrivici.'],
+      ['Con quali siti e browser funziona?', 'ChatGPT, Claude, Gemini e Perplexity funzionano subito. Copilot, DeepSeek, Mistral Le Chat e Grok si attivano nelle impostazioni. Serve Chrome 116 o successivo.'],
+      ['C’è qualcosa che non può proteggere?', 'Il sito della chat vede ciò che scrivi nella sua casella, e potrebbe leggerlo e inviarlo in un modo che nessuna estensione vede. Velami tiene i dati fuori dai log del fornitore, dalla cronologia delle chat e dai dati di addestramento, che è dove di solito finiscono.'],
+    ],
+  },
+  final: {
+    title: 'Cerchiamo cinque studi per una prova gratuita',
+    text: 'Un mese con Velami su tutte le postazioni. Ti seguiamo via chat e mail per installazione e dizionario. In cambio chiediamo un parere sincero.',
+    chat: 'Scrivici in chat',
+    subject: 'Prova di Velami in studio',
   },
 };
 

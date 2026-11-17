@@ -241,6 +241,24 @@ code { font: 500 .84em var(--mono); }
 .doc-site h2 { margin-bottom: 18px; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); letter-spacing: -.025em; }
 .doc-site p { margin: 0 0 16px; }
 
+/* Страница для студий (/it/studi): ссылка на норму над карточкой, подпись с источником, пример текста для клиента */
+.hero-text .tag { margin-bottom: 18px; }
+.law-ref { margin-bottom: 14px; font: 500 .74rem/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
+.src { margin-top: 18px; text-align: center; font-size: .88rem; color: var(--soft); }
+.src a { color: inherit; text-underline-offset: 3px; }
+.src a:hover { color: var(--ink); }
+.stats-plain { margin-top: clamp(28px, 3vw, 44px); }
+.letter-in { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); gap: var(--gap); align-items: start; }
+.letter { padding: clamp(22px, 2.6vw, 32px); }
+.letter #letter-text p { margin-bottom: 14px; font-size: 1.02rem; line-height: 1.6; }
+/* В тёмном блоке --ink белый, поэтому у кнопки на белой карточке свои цвета. */
+.letter-copy { margin-top: 6px; background: var(--card-ink); color: #fff; cursor: pointer; }
+.letter-copy:hover { background: #b3502c; }
+.letter-copy[hidden] { display: none; }
+.letter-note { margin-top: 18px; padding-top: 16px; border-top: 1px solid #ece6df; font-size: .88rem; color: var(--card-soft); }
+.letter-side { display: grid; gap: var(--gap); }
+@media (max-width: 1000px) { .letter-in { grid-template-columns: minmax(0, 1fr); } }
+
 /* Появление при прокрутке. Класс js ставит demo.js, без скриптов всё видно сразу. */
 .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2, .7, .2, 1); }
 .js .reveal.in { opacity: 1; transform: none; }

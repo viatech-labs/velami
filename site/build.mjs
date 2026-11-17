@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-// Сборка velami.pro в dist/site: index.<lang>.html и privacy.<lang>.html для en/it/ru, стили, шрифты, WebP-картинки.
+// Сборка velami.pro в dist/site: index.<lang>.html и privacy.<lang>.html для en/it/ru, studi.it.html, стили, шрифты, WebP-картинки.
 // Скриншоты снимаются из настоящего расширения (tools/brochure/shots.mjs) в /tmp/shots-<lang> или --shots <dir>.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, copyFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { CONTENT, REPO, DOWNLOAD, MAIL, CHAT, SITES, OPTIONAL_SITES } from './content.mjs';
+import { CONTENT, REPO, MAIL, CHAT, SITES, OPTIONAL_SITES, STUDI, store } from './content.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -67,8 +67,8 @@ const MARK_SVG = readFileSync(path.join(ROOT, 'brand', 'velami-mark.svg'), 'utf8
 let markN = 0;
 const mark = (cls = 'mark') => { const id = 'vg' + ++markN; return MARK_SVG.replace(/id="vg"/, `id="${id}"`).replace(/url\(#vg\)/, `url(#${id})`).replace('<svg ', `<svg class="${cls}" aria-hidden="true" `); };
 
-function head(t, lang, { title, description, canonical, og }) {
-  const alt = LANGS.map((l) => `<link rel="alternate" hreflang="${l}" href="${ORIGIN}/${l}/${canonical}">`).join('\n  ');
+function head(t, lang, { title, description, canonical, og, langs = LANGS }) {
+  const alt = langs.map((l) => `<link rel="alternate" hreflang="${l}" href="${ORIGIN}/${l}/${canonical}">`).join('\n  ');
   const preload = [...(lang === 'ru' ? ['cyrillic'] : []), 'latin'].map((sub) => `<link rel="preload" href="/fonts/onest-${sub}.woff2" as="font" type="font/woff2" crossorigin>`).join('\n  ');
   return `<!doctype html>
 <html lang="${lang}">
@@ -81,7 +81,7 @@ function head(t, lang, { title, description, canonical, og }) {
   <meta name="theme-color" content="#ffffff">
   <link rel="canonical" href="${ORIGIN}/${lang}/${canonical}">
   ${alt}
-  <link rel="alternate" hreflang="x-default" href="${ORIGIN}/${canonical}">
+  ${langs.length > 1 ? `<link rel="alternate" hreflang="x-default" href="${ORIGIN}/${canonical}">` : ''}
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -102,8 +102,8 @@ function head(t, lang, { title, description, canonical, og }) {
 }
 
 // Мини-сцены к шагам: настоящий текст, найденный тем же детектором, что в расширении.
-function scenes(lang) {
-  const sc = CONTENT[lang].scene;
+function scenes(lang, own = {}) {
+  const sc = { ...CONTENT[lang].scene, ...own };
   const r = PG.maskText(sc.msg, { vault: new PG.Vault() });
   const values = Object.fromEntries(r.findings.map((f) => [f.token, f.value]));
   let cur = 0;
@@ -117,7 +117,10 @@ function scenes(lang) {
 }
 
 // На главной ссылки меню ведут к якорям той же страницы, на странице политики к главной на том же языке.
-function header(t, lang, home = '') {
+// page попадает в метку ссылки на магазин: по ней видно, с какой страницы пришли на карточку.
+const storeLink = (lang, page, place) => esc(store({ campaign: `${page}-${lang}`, content: place }));
+
+function header(t, lang, home = '', page = 'home') {
   return `<a class="skip" href="#main">${esc(t.skip)}</a>
 <header class="top">
   <div class="wrap top-in">
@@ -128,7 +131,7 @@ function header(t, lang, home = '') {
       <a href="${home}#teams">${esc(t.nav.teams)}</a>
       <a href="${home}#faq">${esc(t.nav.faq)}</a>
     </nav>
-    <a class="btn btn-sm btn-primary top-cta" href="${DOWNLOAD}">${esc(t.nav.cta)}</a>
+    <a class="btn btn-sm btn-primary top-cta" href="${storeLink(lang, page, 'top')}">${esc(t.nav.cta)}</a>
   </div>
 </header>`;
 }
@@ -151,7 +154,7 @@ function footer(t, lang, home = '') {
       <a href="${home}#check">${esc(t.nav.check)}</a>
       <a href="${home}#teams">${esc(t.nav.teams)}</a>
       <a href="${home}#faq">${esc(t.nav.faq)}</a>
-      <a href="/${lang}/privacy">${esc(t.footer.privacy)}</a>
+${lang === 'it' ? `      <a href="/it/${STUDI.path}">${esc(STUDI.footer)}</a>\n` : ''}      <a href="/${lang}/privacy">${esc(t.footer.privacy)}</a>
       <a href="${REPO}">${esc(t.footer.source)}</a>
       <a href="mailto:${MAIL}">${MAIL}</a>
     </nav>
@@ -172,9 +175,9 @@ function picture(lang, name, alt) {
 }
 
 // Живое демо на первом экране. Первый кадр считаем при сборке тем же детектором, чтобы без JS страница выглядела так же.
-function demoBlock(t, lang) {
+function demoBlock(t, lang, own) {
   const labels = Object.fromEntries(Object.entries(I18N.MESSAGES[lang]).filter(([k]) => k.startsWith('type.')).map(([k, v]) => [k.slice(5), v]));
-  const sample = CONTENT[lang].demo.sample;
+  const sample = own || CONTENT[lang].demo.sample;
   const r = PG.maskText(sample, { vault: new PG.Vault() });
   const outHtml = esc(r.text).replace(/\[\[([A-Z_]+)_(\d+)\]\]/g, '<mark class="tok">[[$1_$2]]</mark>');
   const chips = r.findings.map((f) => `<li><span>${esc(labels[f.type] || f.type)}</span><code>${esc(f.token)}</code></li>`).join('');
@@ -266,7 +269,7 @@ ${header(t, lang)}
         <h1>${t.hero.title}</h1>
         <p class="hero-sub">${esc(t.hero.lead)}</p>
         <div class="ctas">
-          <a class="btn btn-primary" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
+          <a class="btn btn-primary" href="${storeLink(lang, 'home', 'hero')}">${icon('download')}${esc(t.hero.cta)}</a>
           <a class="btn btn-ghost" href="${REPO}">${icon('gh')}${esc(t.hero.source)}</a>
         </div>
         <p class="hero-note">${esc(t.hero.note)}</p>
@@ -290,7 +293,10 @@ ${header(t, lang)}
     <div class="wrap">
       ${secH(t.tags.who, t.who.title, t.who.lead)}
       <div class="grid g4">${whos}
-      </div>
+      </div>${lang === 'it' ? `
+      <div class="ctas ctas-sec reveal">
+        <a class="btn btn-ghost" href="/it/${STUDI.path}">${esc(typo(STUDI.homeLink))}${icon('arrow')}</a>
+      </div>` : ''}
     </div>
   </section>
 
@@ -366,7 +372,7 @@ ${header(t, lang)}
         <h2>${esc(t.final.title)}</h2>
         <p>${esc(t.final.text)}</p>
         <div class="ctas">
-          <a class="btn btn-invert" href="${DOWNLOAD}">${icon('download')}${esc(t.hero.cta)}</a>
+          <a class="btn btn-invert" href="${storeLink(lang, 'home', 'final')}">${icon('download')}${esc(t.hero.cta)}</a>
           <a class="btn btn-invert-ghost" href="mailto:${MAIL}">${esc(t.final.ask)}</a>
         </div>
       </div>
@@ -436,7 +442,7 @@ function privacy(lang, sections) {
   // Заголовок без неразрывных пробелов: на узком экране длинное название должно переноситься.
   return `${head(t, lang, { title: `${t.privacy.title} · Velami`, description: t.description, canonical: 'privacy' })}
 <body>
-${header(t, lang, home)}
+${header(t, lang, home, 'privacy')}
 <main id="main" class="doc">
   <div class="wrap doc-in">
     <a class="back" href="${home}">${icon('arrow', 'ic ic-flip')}${esc(t.privacy.back)}</a>
@@ -450,6 +456,159 @@ ${header(t, lang, home)}
   </div>
 </main>
 ${footer(t, lang, home)}
+${chat(lang)}
+</body>
+</html>
+`;
+}
+
+// Страница для профессиональных студий, только итальянский: /it/studi. Тексты в STUDI (content.mjs).
+// Кнопки с data-chat открывают чат OMNIQ (demo.js), без скриптов остаются ссылкой на почту.
+function studi() {
+  const lang = 'it';
+  const t = T[lang];
+  const s = typo(STUDI);
+  const home = `/${lang}/`;
+  const sc = scenes(lang, STUDI.how.scene);
+  const secH = (tag, h, lead) => `<header class="sec-h reveal">
+        <p class="tag">${esc(tag)}</p>
+        <h2>${esc(h)}</h2>${lead ? `\n        <p class="lead">${esc(lead)}</p>` : ''}
+      </header>`;
+  const mail = `mailto:${MAIL}?subject=${encodeURIComponent(STUDI.final.subject)}`;
+  const law = s.law.cards.map(([h, p, ref]) => `
+        <article class="cell team law reveal">
+          <p class="law-ref">${esc(ref)}</p>
+          <h3>${esc(h)}</h3>
+          <p>${esc(p)}</p>
+        </article>`).join('');
+  const stats = STUDI.stats.items.map(([n, l]) => `<div class="stat"><dt>${esc(n)}</dt><dd>${esc(l)}</dd></div>`).join('');
+  const steps = s.how.steps.map(([h, p], i) => `
+        <article class="cell step reveal">
+          <div class="step-art">${sc[i]}</div>
+          <div class="step-text">
+            <p class="step-n">0${i + 1}</p>
+            <h3>${esc(h)}</h3>
+            <p>${rich(p)}</p>
+          </div>
+        </article>`).join('');
+  const notes = s.letter.cards.map(([h, p]) => `
+          <article class="cell team reveal">
+            <h3>${esc(h)}</h3>
+            <p>${esc(p)}</p>
+          </article>`).join('');
+  const rules = s.rules.cards.map(([h, p], i) => `
+        <article class="cell team reveal">
+          <p class="step-n">0${i + 1}</p>
+          <h3>${esc(h)}</h3>
+          <p>${esc(p)}</p>
+        </article>`).join('');
+  const faq = s.faq.items.map(([q, a]) => `
+        <details>
+          <summary>${esc(q)}</summary>
+          <p>${esc(a)}</p>
+        </details>`).join('');
+  const ld = {
+    '@context': 'https://schema.org', '@type': 'FAQPage', inLanguage: lang,
+    mainEntity: STUDI.faq.items.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+  };
+
+  return `${head(t, lang, { title: STUDI.title, description: STUDI.description, canonical: STUDI.path, langs: [lang], og: `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>` })}
+<body>
+${header(t, lang, home, 'studi')}
+<main id="main">
+  <section class="hero">
+    <div class="wrap hero-in">
+      <div class="hero-text">
+        <p class="tag">${esc(s.hero.tag)}</p>
+        <h1>${s.hero.title}</h1>
+        <p class="hero-sub">${esc(s.hero.lead)}</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="${storeLink(lang, 'studi', 'hero')}">${icon('download')}${esc(t.hero.cta)}</a>
+          <a class="btn btn-ghost" href="${mail}" data-chat>${esc(s.hero.pilot)}</a>
+        </div>
+        <p class="hero-note">${esc(s.hero.note)}</p>
+      </div>
+      <div class="hero-demo">
+        ${demoBlock(t, lang, STUDI.sample)}
+      </div>
+    </div>
+  </section>
+
+  <section id="legge" class="sec">
+    <div class="wrap">
+      ${secH(s.law.tag, s.law.title, s.law.lead)}
+      <div class="grid g3">${law}
+      </div>
+      <p class="src reveal"><a href="${esc(STUDI.law.url)}" rel="noopener">${esc(s.law.link)}</a></p>
+      <dl class="stats-in stats-plain reveal">${stats}</dl>
+      <p class="src reveal"><a href="${esc(STUDI.stats.url)}" rel="noopener">${esc(STUDI.stats.source)}</a></p>
+    </div>
+  </section>
+
+  <section id="how" class="sec">
+    <div class="wrap">
+      ${secH(s.how.tag, s.how.title, s.how.lead)}
+      <div class="grid g3">${steps}
+      </div>
+      <article class="cell card grid-next reveal">
+        <h3>${esc(s.how.files)}</h3>
+        <p>${esc(t.files.text)}</p>
+        <ul class="chips chips-mono">${FORMATS.map((f) => `<li>${f}</li>`).join('')}</ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="informativa" class="sec sec-dark">
+    <div class="wrap">
+      ${secH(s.letter.tag, s.letter.title, s.letter.lead)}
+      <div class="letter-in">
+        <div class="mock letter reveal">
+          <p class="mock-h">${esc(s.letter.label)}</p>
+          <div id="letter-text">${STUDI.letter.paras.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
+          <button class="btn btn-sm btn-primary letter-copy" type="button" data-copy="letter-text" data-done="${esc(STUDI.letter.copied)}" hidden>${esc(STUDI.letter.copy)}</button>
+          <p class="letter-note">${esc(s.letter.note)}</p>
+        </div>
+        <div class="letter-side">${notes}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="studio" class="sec">
+    <div class="wrap">
+      ${secH(s.rules.tag, s.rules.title, s.rules.lead)}
+      <div class="grid g3">${rules}
+      </div>
+      <div class="ctas ctas-sec reveal">
+        <a class="btn btn-ghost" href="${REPO}/blob/main/docs/ENTERPRISE.md">${esc(s.rules.guide)}${icon('arrow')}</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="sec">
+    <div class="wrap faq-in">
+      ${secH(s.faq.tag, s.faq.title)}
+      <div class="faq reveal">${faq}
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <div class="final-in">
+        <h2>${esc(s.final.title)}</h2>
+        <p>${esc(s.final.text)}</p>
+        <div class="ctas">
+          <a class="btn btn-invert" href="${mail}" data-chat>${esc(s.final.chat)}</a>
+          <a class="btn btn-invert-ghost" href="${storeLink(lang, 'studi', 'final')}">${icon('download')}${esc(t.hero.cta)}</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+${footer(t, lang, home)}
+<script src="/detector.js?v=${HASH}"></script>
+<script src="/demo.js?v=${HASH}"></script>
 ${chat(lang)}
 </body>
 </html>
@@ -502,9 +661,11 @@ async function main() {
     writeFileSync(path.join(OUT, `index.${lang}.html`), index(lang));
     writeFileSync(path.join(OUT, `privacy.${lang}.html`), privacy(lang, sections));
   }
+  writeFileSync(path.join(OUT, 'studi.it.html'), studi());
 
   writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${ORIGIN}/sitemap.xml\n`);
-  const urls = LANGS.flatMap((l) => ['', 'privacy'].map((p) => `  <url><loc>${ORIGIN}/${l}/${p}</loc>${LANGS.map((a) => `<xhtml:link rel="alternate" hreflang="${a}" href="${ORIGIN}/${a}/${p}"/>`).join('')}</url>`));
+  const only = `  <url><loc>${ORIGIN}/it/${STUDI.path}</loc></url>`;
+  const urls = [only, ...LANGS.flatMap((l) => ['', 'privacy'].map((p) => `  <url><loc>${ORIGIN}/${l}/${p}</loc>${LANGS.map((a) => `<xhtml:link rel="alternate" hreflang="${a}" href="${ORIGIN}/${a}/${p}"/>`).join('')}</url>`))];
   writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`);
   writeFileSync(path.join(OUT, '.well-known-security.txt'), `Contact: mailto:${MAIL}\nPolicy: ${REPO}/blob/main/SECURITY.md\nPreferred-Languages: en, it, ru\nExpires: 2027-11-01T00:00:00.000Z\n`);
 

@@ -20,6 +20,7 @@ export function resolve(url, acceptLanguage) {
   const p = new URL(url, 'http://x').pathname;
   const m = p.match(/^\/(?:(en|it|ru)\/?)?(privacy)?\/?$/);
   if (m) return `${m[2] ? 'privacy' : 'index'}.${m[1] || pickLang(acceptLanguage)}.html`;
+  if (/^\/it\/studi\/?$/.test(p)) return 'studi.it.html';
   return p.slice(1);
 }
 

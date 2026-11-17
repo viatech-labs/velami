@@ -10,6 +10,37 @@
     reveal.forEach(function (n) { io.observe(n); });
   }
 
+  /* Кнопки «написать в чат» открывают чат OMNIQ. У виджета нет своего метода для этого, поэтому нажимается его
+     круглая кнопка. Если чат не загрузился, срабатывает обычная ссылка на почту. */
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest && e.target.closest('[data-chat]');
+    if (!link || !window.OmniqWidget) return;
+    var bubble = Array.prototype.filter.call(document.body.children, function (n) {
+      return n.tagName === 'BUTTON' && getComputedStyle(n).position === 'fixed';
+    })[0];
+    if (!bubble) return;
+    e.preventDefault();
+    var open = Array.prototype.some.call(document.body.children, function (n) {
+      return n.tagName === 'DIV' && getComputedStyle(n).position === 'fixed' && getComputedStyle(n).display !== 'none' && n.querySelector('.omniq-w-input');
+    });
+    if (!open) bubble.click();
+  });
+
+  /* Кнопка «скопировать текст»: видна только там, где буфер доступен. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (btn) {
+    var src = document.getElementById(btn.getAttribute('data-copy'));
+    if (!src || !navigator.clipboard || !navigator.clipboard.writeText) return;
+    var label = btn.textContent;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      var text = Array.prototype.map.call(src.querySelectorAll('p'), function (p) { return p.textContent.replace(/\u00a0/g, ' '); }).join('\n\n');
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = btn.getAttribute('data-done');
+        setTimeout(function () { btn.textContent = label; }, 1800);
+      }, function () {});
+    });
+  });
+
   var root = document.getElementById('demo');
   if (!root || !window.PG) return;
   var input = document.getElementById('demo-in');
