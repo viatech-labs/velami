@@ -18,7 +18,8 @@ const Img = require('../src/image.js');
 const Tesseract = require('tesseract.js');
 const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const out = path.join(root, 'test', 'artifacts', 'live');
+/* QA_OUT задаёт свою папку отчёта: ежедневная проверка (tools/qa-daily.mjs) не должна затирать матрицу. */
+const out = process.env.QA_OUT ? path.resolve(process.env.QA_OUT) : path.join(root, 'test', 'artifacts', 'live');
 const files = path.join(root, 'test', 'fixtures', 'files');
 mkdirSync(out, { recursive: true });
 
@@ -88,6 +89,10 @@ const PAYWALL = /Подтвердить и оплатить|Confirm and pay|Conf
 const TOKEN = /\[\[[A-Z_]+_\d+\]\]|(?<![A-Za-z0-9_])\[?(PERSON|EMAIL|CARD|IBAN|CF|PHONE|DOB|PASSPORT|PLATE|SECRET|ADDRESS)_\d+\]?(?![A-Za-z0-9_])/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sessions = new WeakMap();
+/* Сайт показывает вход вместо аккаунта: тестовую сессию сбросили. Случай всё равно идёт (часть сайтов
+   отвечает и без входа), но в отчёте остаётся пометка, чтобы отказ в файле не приняли за поломку Velami. */
+const SIGN_IN = /^(Log in|Sign in|Accedi|Войти|Увійти|Вхід|Вход)$/i;
+const seen = { signedOut: false };
 
 /* ---------- что на самом деле ушло в файлах ----------
    Тела загрузок сжаты (Office) или лежат картинкой (PDF, снимки): поиск значений по сырым байтам
@@ -219,8 +224,9 @@ try {
   for (const site of sites) {
     for (const name of cases) {
       const t0 = Date.now();
+      seen.signedOut = false;
       const r = await runCase(site, name, CASES[name]).catch((e) => ({ ok: false, error: String(e && e.message || e).slice(0, 300) }));
-      const row = { site, case: name, sec: Math.round((Date.now() - t0) / 1000), ...r };
+      const row = { site, case: name, sec: Math.round((Date.now() - t0) / 1000), ...(seen.signedOut ? { signedOut: true } : {}), ...r };
       report.push(row);
       console.log(JSON.stringify(row));
       writeFileSync(path.join(out, 'report.json'), JSON.stringify({ version, at: new Date().toISOString(), rows: report }, null, 2));
@@ -268,6 +274,11 @@ try {
       }
       await dismissPopups(page);
       let composer = await findComposer(page);
+      seen.signedOut = await page.evaluate((src) => {
+        if (/\/(login|signin|auth)(\/|$)/.test(location.pathname) || location.host === 'accounts.google.com') return true;
+        const re = new RegExp(src, 'i');
+        return [...document.querySelectorAll('a, button')].some((n) => n.getBoundingClientRect().height > 0 && re.test((n.innerText || '').trim()));
+      }, SIGN_IN.source).catch(() => false);
       if (!composer) { await shot('0-nocomposer'); return { ok: false, error: 'нет поля ввода: ' + await page.title() }; }
       /* После первого сообщения сайт может заменить поле ввода другим (Mistral показывает уточняющий
          вопрос со своим полем ответа): старый элемент исчезает, поле ищется заново. */
