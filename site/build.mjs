@@ -295,7 +295,7 @@ ${header(t, lang)}
       <div class="grid g4">${whos}
       </div>${lang === 'it' ? `
       <div class="ctas ctas-sec reveal">
-        <a class="btn btn-ghost" href="/it/${STUDI.path}">${esc(typo(STUDI.homeLink))}${icon('arrow')}</a>
+        <a class="btn btn-ghost btn-wrap" href="/it/${STUDI.path}">${esc(STUDI.homeLink)}${icon('arrow')}</a>
       </div>` : ''}
     </div>
   </section>

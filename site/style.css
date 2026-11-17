@@ -243,6 +243,8 @@ code { font: 500 .84em var(--mono); }
 
 /* Страница для студий (/it/studi): ссылка на норму над карточкой, подпись с источником, пример текста для клиента */
 .hero-text .tag { margin-bottom: 18px; }
+/* Длинная подпись на кнопке: на телефоне переносится, а не растягивает страницу вбок. */
+.btn-wrap { padding-block: 12px; line-height: 1.25; text-align: center; white-space: normal; }
 .law-ref { margin-bottom: 14px; font: 500 .74rem/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
 .src { margin-top: 18px; text-align: center; font-size: .88rem; color: var(--soft); }
 .src a { color: inherit; text-underline-offset: 3px; }
