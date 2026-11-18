@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { CONTENT, REPO, MAIL, CHAT, SITES, OPTIONAL_SITES, STUDI, store } from './content.mjs';
+import { CONTENT, REPO, MAIL, CHAT, SITES, OPTIONAL_SITES, STUDI, GOOGLE_VERIFY, store } from './content.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -79,6 +79,7 @@ function head(t, lang, { title, description, canonical, og, langs = LANGS }) {
   <meta name="description" content="${esc(description)}">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
+  <meta name="google-site-verification" content="${esc(GOOGLE_VERIFY)}">
   <link rel="canonical" href="${ORIGIN}/${lang}/${canonical}">
   ${alt}
   ${langs.length > 1 ? `<link rel="alternate" hreflang="x-default" href="${ORIGIN}/${canonical}">` : ''}

@@ -14,6 +14,9 @@ export const store = ({ source = 'velami.pro', medium = 'site', campaign, conten
   return `${DOWNLOAD}?${q}`;
 };
 export const MAIL = 'support@velami.pro';
+// Подтверждение сайта в Google Search Console (ресурс https://velami.pro, способ «Тег HTML»). Значение не секрет:
+// оно видно в коде страницы. Тег должен оставаться на сайте, иначе Google снимет подтверждение (AIGW-49).
+export const GOOGLE_VERIFY = '7sBPfctBftjoy6TetSV5KRs_mpve2NsN2euZsDtHYyk';
 // Чат поддержки: виджет OMNIQ, сайт «Velami» компании via-tech на omniq.pro (AIGW-36).
 // Цвет, приветствие, база знаний помощника и воронка лидов меняются в OMNIQ (Portal, Сайты), без выкладки сайта.
 // Адрес omniq.pro разрешён в site/headers.conf, там же хэш стиля, который добавляет widget.js.
