@@ -240,6 +240,18 @@ code { font: 500 .84em var(--mono); }
 .doc-site { margin-top: 44px; padding-top: 36px; border-top: 1px solid var(--line); }
 .doc-site h2 { margin-bottom: 18px; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); letter-spacing: -.025em; }
 .doc-site p { margin: 0 0 16px; }
+/* Guide (/it/guide/...): titoli di sezione, citazioni della norma e dell'esempio, elenco fonti. */
+.doc-sub { margin: -6px 0 14px; font-size: 1.14rem; line-height: 1.5; color: var(--muted); }
+.doc-in > h2 { margin: 44px 0 14px; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); letter-spacing: -.025em; }
+.doc-in > p:first-of-type:not(.doc-sub):not(.doc-ver) { font-size: 1.08rem; }
+.doc blockquote { margin: 0 0 14px; padding: 14px 20px; border-left: 3px solid var(--accent); border-radius: 0 14px 14px 0; background: var(--surface); }
+.doc blockquote p { margin: 0; }
+.doc blockquote + blockquote { margin-top: -4px; }
+.doc-src { margin: 0; padding-left: 1.3em; }
+.doc-src li { margin-bottom: 8px; }
+.doc-site .faq details { background: var(--surface); }
+.doc-site .faq summary { font-size: 1.05rem; padding: 18px 0; }
+.doc-site .faq details p { padding-right: 32px; }
 
 /* Страница для студий (/it/studi): ссылка на норму над карточкой, подпись с источником, пример текста для клиента */
 .hero-text .tag { margin-bottom: 18px; }

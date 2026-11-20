@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { CONTENT, REPO, MAIL, CHAT, SITES, OPTIONAL_SITES, STUDI, GOOGLE_VERIFY, store } from './content.mjs';
+import { GUIDES, GUIDE_UI } from './guides.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -424,6 +425,8 @@ function md2html(md) {
   for (const raw of md.split('\n')) {
     const line = raw.trimEnd();
     if (/^###\s/.test(line)) { flush(); close(); out.push(`<h3>${inline(line.replace(/^###\s+/, ''))}</h3>`); continue; }
+    if (/^##\s/.test(line)) { flush(); close(); out.push(`<h2>${inline(line.replace(/^##\s+/, ''))}</h2>`); continue; }
+    if (/^>\s/.test(line)) { flush(); close(); out.push(`<blockquote><p>${inline(line.replace(/^>\s+/, ''))}</p></blockquote>`); continue; }
     const li = line.match(/^\s*[-*]\s+(.*)$/);
     if (li) { flush(); (list ||= []).push(li[1].replace(/;$/, '')); continue; }
     if (list && /^\s{2,}\S/.test(line)) { list[list.length - 1] += ' ' + line.trim().replace(/;$/, ''); continue; }
@@ -540,7 +543,7 @@ ${header(t, lang, home, 'studi')}
       ${secH(s.law.tag, s.law.title, s.law.lead)}
       <div class="grid g3">${law}
       </div>
-      <p class="src reveal"><a href="${esc(STUDI.law.url)}" rel="noopener">${esc(s.law.link)}</a></p>
+      <p class="src reveal"><a href="${esc(STUDI.law.url)}" rel="noopener">${esc(s.law.link)}</a> · <a href="/it/guide/${GUIDES[0].slug}">${esc(GUIDE_UI.studiLink)}</a></p>
       <dl class="stats-in stats-plain reveal">${stats}</dl>
       <p class="src reveal"><a href="${esc(STUDI.stats.url)}" rel="noopener">${esc(STUDI.stats.source)}</a></p>
     </div>
@@ -616,6 +619,71 @@ ${chat(lang)}
 `;
 }
 
+// Guida per gli studi, solo italiano: /it/guide/<slug>. Testi in GUIDES (guides.mjs), stesso impianto della pagina privacy.
+function guide(g) {
+  const lang = 'it';
+  const t = T[lang];
+  const home = `/${lang}/`;
+  const canonical = `guide/${g.slug}`;
+  const date = (iso) => new Date(iso + 'T00:00:00Z').toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const body = md2html(g.body.trim()).replace(/\[\[([A-Z_0-9]+)\]\]/g, '<code class="tok">[[$1]]</code>');
+  const faq = g.faq.map(([q, a]) => `
+        <details>
+          <summary>${esc(glue(q))}</summary>
+          <p>${esc(a)}</p>
+        </details>`).join('');
+  const sources = g.sources.map(([label, url]) => `<li><a href="${esc(url)}" rel="noopener">${esc(label)}</a></li>`).join('\n      ');
+  const ld = [
+    {
+      '@context': 'https://schema.org', '@type': 'Article', inLanguage: lang, headline: g.title, description: g.description,
+      datePublished: g.published, dateModified: g.updated, mainEntityOfPage: `${ORIGIN}/${lang}/${canonical}`,
+      author: { '@type': 'Organization', name: 'Via-Tech', url: 'https://via-tech.org' },
+      publisher: { '@type': 'Organization', name: 'Velami', url: `${ORIGIN}/${lang}/`, logo: { '@type': 'ImageObject', url: `${ORIGIN}/apple-touch-icon.png` } },
+    },
+    { '@context': 'https://schema.org', '@type': 'FAQPage', inLanguage: lang, mainEntity: g.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
+  ].map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, '\\u003c')}</script>`).join('\n  ');
+  return `${head(t, lang, { title: g.title, description: g.description, canonical, langs: [lang], og: ld })}
+<body>
+${header(t, lang, home, 'guide')}
+<main id="main" class="doc">
+  <article class="wrap doc-in">
+    <a class="back" href="/it/${STUDI.path}">${icon('arrow', 'ic ic-flip')}${esc(GUIDE_UI.back)}</a>
+    <h1>${esc(glue(g.h1))}</h1>
+    <p class="doc-sub">${esc(g.sub)}</p>
+    <p class="doc-ver">${esc(GUIDE_UI.updated)} ${esc(date(g.updated))}. ${esc(GUIDE_UI.disclaimer)}</p>
+    ${body}
+    <section class="doc-site" id="faq">
+      <h2>${esc(GUIDE_UI.faq)}</h2>
+      <div class="faq">${faq}
+      </div>
+    </section>
+    <section class="doc-site" id="fonti">
+      <h2>${esc(GUIDE_UI.sources)}</h2>
+      <ol class="doc-src">
+      ${sources}
+      </ol>
+    </section>
+  </article>
+</main>
+<section class="final">
+  <div class="wrap">
+    <div class="final-in">
+      <h2>${esc(GUIDE_UI.final.title)}</h2>
+      <p>${esc(GUIDE_UI.final.text)}</p>
+      <div class="ctas">
+        <a class="btn btn-invert" href="/it/${STUDI.path}">${esc(GUIDE_UI.final.studi)}${icon('arrow')}</a>
+        <a class="btn btn-invert-ghost" href="${storeLink(lang, 'guide', g.slug)}">${icon('download')}${esc(t.hero.cta)}</a>
+      </div>
+    </div>
+  </div>
+</section>
+${footer(t, lang, home)}
+${chat(lang)}
+</body>
+</html>
+`;
+}
+
 function webp(src, dst, width) {
   const args = ['-quiet', '-q', '82', '-m', '6', '-metadata', 'none'];
   if (width) args.push('-resize', String(width), '0');
@@ -663,10 +731,12 @@ async function main() {
     writeFileSync(path.join(OUT, `privacy.${lang}.html`), privacy(lang, sections));
   }
   writeFileSync(path.join(OUT, 'studi.it.html'), studi());
+  for (const g of GUIDES) writeFileSync(path.join(OUT, `guide-${g.slug}.it.html`), guide(g));
 
   writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${ORIGIN}/sitemap.xml\n`);
   const only = `  <url><loc>${ORIGIN}/it/${STUDI.path}</loc></url>`;
-  const urls = [only, ...LANGS.flatMap((l) => ['', 'privacy'].map((p) => `  <url><loc>${ORIGIN}/${l}/${p}</loc>${LANGS.map((a) => `<xhtml:link rel="alternate" hreflang="${a}" href="${ORIGIN}/${a}/${p}"/>`).join('')}</url>`))];
+  const guides = GUIDES.map((g) => `  <url><loc>${ORIGIN}/it/guide/${g.slug}</loc><lastmod>${g.updated}</lastmod></url>`);
+  const urls = [only, ...guides, ...LANGS.flatMap((l) => ['', 'privacy'].map((p) => `  <url><loc>${ORIGIN}/${l}/${p}</loc>${LANGS.map((a) => `<xhtml:link rel="alternate" hreflang="${a}" href="${ORIGIN}/${a}/${p}"/>`).join('')}</url>`))];
   writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`);
   writeFileSync(path.join(OUT, '.well-known-security.txt'), `Contact: mailto:${MAIL}\nPolicy: ${REPO}/blob/main/SECURITY.md\nPreferred-Languages: en, it, ru\nExpires: 2027-11-01T00:00:00.000Z\n`);
 
