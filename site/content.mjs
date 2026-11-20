@@ -443,7 +443,7 @@ export const STUDI = {
       ['La risposta torna completa', 'L’IA risponde con le etichette. Velami rimette i dati, solo sullo schermo dello studio. Anche il testo copiato è quello reale.'],
     ],
     files: 'Anche PDF, Word, Excel e scansioni',
-    video: 'Guarda il video di un minuto su YouTube',
+    video: 'Guarda il video di un minuto',
     videoUrl: 'https://www.youtube.com/watch?v=FOopAMUPtQk',
   },
   letter: {
