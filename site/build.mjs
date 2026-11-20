@@ -559,6 +559,7 @@ ${header(t, lang, home, 'studi')}
         <p>${esc(t.files.text)}</p>
         <ul class="chips chips-mono">${FORMATS.map((f) => `<li>${f}</li>`).join('')}</ul>
       </article>
+      <p class="src reveal"><a href="${esc(STUDI.how.videoUrl)}" rel="noopener">${esc(s.how.video)}</a></p>
     </div>
   </section>
 
