@@ -74,7 +74,7 @@ export const CONTENT = {
     },
     types: {
       title: 'What it hides',
-      lead: 'Numbers are matched by format and checksum, so a random number is not mistaken for a card. Names and addresses are found by a compact AI model that ships with the extension and runs offline.',
+      lead: 'Numbers are matched by format and checksum, so a random number is not mistaken for a card. Names, addresses and company names are found by rules and by a compact AI model that ships with the extension and runs offline.',
       list: ['Names', 'Addresses', 'Company names', 'Bank cards', 'IBAN', 'Phone numbers', 'E-mail', 'Tax codes', 'Passports and ID cards', 'Dates of birth', 'Car plates', 'API keys', 'Passwords', 'IP addresses', 'Your own words'],
     },
     rows: { title: 'What Velami hides', msg: 'In every message', files: 'In attached files', sites: 'On the sites you use' },
@@ -197,7 +197,7 @@ export const CONTENT = {
     },
     types: {
       title: 'Cosa nasconde',
-      lead: 'I numeri vengono riconosciuti per formato e cifra di controllo, così un numero qualsiasi non viene scambiato per una carta. Nomi e indirizzi li trova un piccolo modello di IA incluso nell’estensione, che funziona offline.',
+      lead: 'I numeri vengono riconosciuti per formato e cifra di controllo, così un numero qualsiasi non viene scambiato per una carta. Nomi, indirizzi e nomi di aziende li trovano le regole e un piccolo modello di IA incluso nell’estensione, che funziona offline.',
       list: ['Nomi', 'Indirizzi', 'Nomi di aziende', 'Carte bancarie', 'IBAN', 'Telefoni', 'E-mail', 'Codice fiscale e P. IVA', 'Documenti d’identità', 'Date di nascita', 'Targhe', 'Chiavi API', 'Password', 'Indirizzi IP', 'Le tue parole'],
     },
     rows: { title: 'Cosa nasconde Velami', msg: 'In ogni messaggio', files: 'Nei file allegati', sites: 'Sui siti che usi' },
@@ -320,7 +320,7 @@ export const CONTENT = {
     },
     types: {
       title: 'Что скрывает',
-      lead: 'Номера проверяются по формату и контрольной сумме, поэтому случайное число не примут за карту. Имена и адреса находит небольшая модель ИИ, которая входит в расширение и работает без интернета.',
+      lead: 'Номера проверяются по формату и контрольной сумме, поэтому случайное число не примут за карту. Имена, адреса и названия компаний находят правила и небольшая модель ИИ, которая входит в расширение и работает без интернета.',
       list: ['Имена', 'Адреса', 'Названия компаний', 'Банковские карты', 'IBAN', 'Телефоны', 'E-mail', 'ИНН и СНИЛС', 'Паспорта и удостоверения', 'Даты рождения', 'Госномера', 'API-ключи', 'Пароли', 'IP-адреса', 'Ваши слова'],
     },
     rows: { title: 'Что скрывает Velami', msg: 'В каждом сообщении', files: 'Во вложенных файлах', sites: 'На сайтах, где вы общаетесь' },
