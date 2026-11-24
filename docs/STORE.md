@@ -114,9 +114,9 @@ Description:
 
 Write to ChatGPT, Claude, Gemini and Perplexity as usual. Copilot, DeepSeek, Mistral Le Chat
 and Grok can be turned on in the settings. Before a message leaves your computer, Velami finds
-card numbers, IBANs, tax codes, ID documents, dates of birth, licence plates, phone numbers, e-mails and API keys, recognises names and addresses
+card numbers, IBANs, tax codes, ID documents, dates of birth, licence plates, phone numbers, e-mails and API keys, recognises names, addresses and company names
 with a model that runs on your computer, and replaces them with labels like [[EMAIL_1]]. The model answers with labels, you see the answer with
-the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, PDF as the same pages with the data covered, images as the same image with the data covered, and the Copy button gives you the
+the real values. Text files you attach are cleaned the same way, Word, Excel and PowerPoint go as the same document with labels, a whole Excel column of clients or departments can be hidden at once, PDF as the same pages with the data covered, images as the same image with the data covered, and the Copy button gives you the
 real values. Before a file goes out you can open its clean copy and see exactly what the site will get.
 
 You do not have to trust us. A panel next to the chat shows the exact text the model will get. The
@@ -136,9 +136,9 @@ Description:
 
 Scrivi a ChatGPT, Claude, Gemini e Perplexity come sempre. Copilot, DeepSeek, Mistral Le Chat
 e Grok si attivano nelle impostazioni. Prima che un messaggio lasci il tuo computer, Velami
-trova numeri di carta, IBAN, codici fiscali, documenti, date di nascita, targhe, telefoni, e-mail e chiavi API, riconosce nomi e
-indirizzi con un modello che gira sul tuo computer, e li sostituisce con etichette come [[EMAIL_1]]. Il modello risponde con le etichette, tu vedi la
-risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, i PDF come le stesse pagine con i dati coperti, le immagini come la stessa immagine con i dati coperti, e il pulsante Copia
+trova numeri di carta, IBAN, codici fiscali, documenti, date di nascita, targhe, telefoni, e-mail e chiavi API, riconosce nomi, indirizzi e
+nomi di aziende con un modello che gira sul tuo computer, e li sostituisce con etichette come [[EMAIL_1]]. Il modello risponde con le etichette, tu vedi la
+risposta con i valori reali. Anche i file di testo che alleghi vengono ripuliti, Word, Excel e PowerPoint partono come lo stesso documento con le etichette, un’intera colonna Excel di clienti o reparti si può nascondere in un colpo, i PDF come le stesse pagine con i dati coperti, le immagini come la stessa immagine con i dati coperti, e il pulsante Copia
 ti dà i valori reali. Prima dell’invio puoi aprire la copia pulita e vedere esattamente cosa riceverà il sito.
 
 Non devi fidarti di noi. Un pannello accanto alla chat mostra il testo esatto che riceverà il
@@ -158,9 +158,9 @@ Description:
 
 Пишите в ChatGPT, Claude, Gemini и Perplexity как обычно. Copilot, DeepSeek, Mistral Le Chat
 и Grok включаются в настройках. До того как сообщение покинет компьютер, Velami
-находит номера карт, IBAN, налоговые коды, документы, даты рождения, госномера, телефоны, e-mail и API-ключи, распознаёт имена и адреса
+находит номера карт, IBAN, налоговые коды, документы, даты рождения, госномера, телефоны, e-mail и API-ключи, распознаёт имена, адреса и названия компаний
 моделью, которая работает на вашем компьютере, и заменяет их метками вроде [[EMAIL_1]]. Модель отвечает с метками, а вы видите ответ с настоящими
-значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, PDF теми же страницами с закрытыми данными, картинки той же картинкой с закрытыми данными, а кнопка «Копировать» отдаёт настоящие
+значениями. Прикреплённые текстовые файлы очищаются так же, Word, Excel и PowerPoint уходят тем же документом с метками, целую колонку Excel с клиентами или отделами можно скрыть разом, PDF теми же страницами с закрытыми данными, картинки той же картинкой с закрытыми данными, а кнопка «Копировать» отдаёт настоящие
 значения. Перед отправкой файла можно открыть чистую копию и увидеть, что именно получит сайт.
 
 Верить нам на слово не нужно. Панель рядом с чатом показывает точный текст, который получит модель.

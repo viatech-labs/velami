@@ -306,3 +306,58 @@ test('дата рождения, госномер, полис ОМС, докум
   const b = PG.detect('госномер A123BC77')[0];
   assert.equal(a.id, b.id, 'кириллица и латиница в госномере дают одну метку');
 });
+
+test('организации по организационно-правовой форме на трёх языках, без союзов и вводных слов', () => {
+  const orgs = (t, o) => PG.detect(t, o).filter((f) => f.type === 'ORG').map((f) => f.value);
+  assert.deepEqual(orgs('Договор с ООО «Ромашка» и ПАО Сбербанк подписан.'), ['ООО «Ромашка»', 'ПАО Сбербанк']);
+  assert.deepEqual(orgs('Поставщик: АО "Газпром нефть", Банк «Открытие», Группа компаний «Самолёт».'), ['АО "Газпром нефть"', 'Банк «Открытие»', 'Группа компаний «Самолёт»']);
+  assert.deepEqual(orgs('Fattura a Rossi S.r.l. e a Bianchi & Figli S.n.c., sede a Milano.'), ['Rossi S.r.l.', 'Bianchi & Figli S.n.c.']);
+  assert.deepEqual(orgs('La ditta Alfa Trading S.p.A., lo Studio Legale Moretti e i F.lli Neri.'), ['Alfa Trading S.p.A.', 'Studio Legale Moretti', 'F.lli Neri']);
+  assert.deepEqual(orgs('Contract with Acme Holdings Ltd and Globex Corp. signed by Deloitte LLP.'), ['Acme Holdings Ltd', 'Globex Corp.', 'Deloitte LLP']);
+  assert.deepEqual(orgs('Mueller GmbH & Co. KG, Nordic Oy, Société Générale S.A.'), ['Mueller GmbH & Co. KG', 'Nordic Oy', 'Société Générale S.A.']);
+  assert.deepEqual(orgs('Spettabile Rossi S.r.l., in allegato la fattura. Yesterday Acme Ltd announced results.'), ['Rossi S.r.l.', 'Acme Ltd']);
+  for (const t of ['Hotel Spa e centro benessere.', 'Я работаю в ООО и ИП одновременно.', 'Il sas è un software statistico.', 'Siamo arrivati al Polo Nord.']) {
+    assert.deepEqual(orgs(t), [], t);
+  }
+  assert.deepEqual(orgs('Cliente\tRossi S.r.l.\tImporto'), ['Rossi S.r.l.'], 'табуляция отделяет соседнюю ячейку');
+  assert.deepEqual(orgs('Договор с ООО «Ромашка» и Rossi S.r.l.', { orgs: false }), [], 'выключатель orgs');
+  const a = PG.detect('ООО «Ромашка»')[0];
+  const b = PG.detect('ООО "Ромашка"')[0];
+  assert.equal(a.type, 'ORG');
+  assert.equal(a.id, b.id, 'вид кавычек не меняет метку');
+  const auto = [{ term: 'Сбербанк', type: 'ORG', score: 0.9 }];
+  assert.deepEqual(orgs('Счёт в Сбербанке открыт.', { auto }), ['Сбербанке']);
+  assert.deepEqual(orgs('Счёт в Сбербанке открыт.', { auto, orgs: false }), [], 'без orgs находки модели ORG не применяются');
+});
+
+test('словарь колонок таблицы: одна метка на значение в любом регистре, источник column', () => {
+  const dictionary = [
+    { term: 'Rossi S.r.l.', type: 'ORG', column: true },
+    { term: 'Alfa Trading', type: 'ORG', column: true },
+    { term: 'Nord Ovest', type: 'CUSTOM', column: true },
+    { term: 'ООО «Ромашка»', type: 'ORG', column: true },
+  ];
+  const text = 'Cliente\tReparto\nRossi S.r.l.\tNord Ovest\nAlfa Trading\tNord Ovest\nROSSI S.R.L.\tCentro\nRiordino Alfa Trading a marzo. Платёж от ООО "Ромашка".';
+  const vault = new PG.Vault();
+  const r = PG.maskText(text, { vault, dictionary, commit: true });
+  assert.equal(r.text, 'Cliente\tReparto\n[[ORG_1]]\t[[CUSTOM_1]]\n[[ORG_2]]\t[[CUSTOM_1]]\n[[ORG_1]]\tCentro\nRiordino [[ORG_2]] a marzo. Платёж от [[ORG_3]].');
+  assert.ok(r.findings.every((f) => f.source === 'column'));
+  assert.equal(PG.detect('ООО «Ромашка»')[0].id, r.findings.at(-1).id, 'правило и колонка дают одну метку');
+  assert.equal(vault.data.byToken['[[ORG_1]]'], 'Rossi S.r.l.', 'в хранилище каноническая форма из колонки');
+  assert.equal(PG.maskText('Nota per Rossi S.r.l.', { vault, dictionary: [], commit: false }).text, 'Nota per [[ORG_1]]', 'правило формы в другом тексте даёт ту же метку, что колонка');
+});
+
+test('словарь на тысячи терминов и длинная таблица: поиск по указателю слов остаётся быстрым', () => {
+  const dictionary = [];
+  for (let i = 0; i < 3000; i++) dictionary.push({ term: `Società Numero ${i} S.r.l.`, type: 'ORG', column: true });
+  const rows = [];
+  for (let i = 0; i < 3000; i++) rows.push(`Società Numero ${i} S.r.l.\tNord\t${i * 10}`);
+  const text = rows.join('\n');
+  PG.detect(text, { dictionary });
+  const t0 = performance.now();
+  const found = PG.detect(text, { dictionary });
+  const ms = performance.now() - t0;
+  assert.equal(found.length, 3000);
+  assert.ok(found.every((f) => f.source === 'column'), 'значение колонки важнее общего правила формы');
+  assert.ok(ms < 1500, 'второй проход ' + Math.round(ms) + ' мс');
+});

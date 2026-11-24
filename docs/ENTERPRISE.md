@@ -16,10 +16,12 @@ ID from the Chrome Web Store listing.
 | `supportContact` | string | E-mail, phone or intranet link shown when the policy blocks a file |
 | `enabled` | boolean | `true` keeps protection always on |
 | `rehydrate` | boolean | Real values shown in answers |
-| `model` | boolean | Local name and address model. `false` for computers with little memory |
+| `model` | boolean | Local name, address and organisation model. `false` for computers with little memory |
+| `orgs` | boolean | Hide company and organisation names found by legal form and by the model. `true` keeps it always on |
 | `askImages` | boolean | Ask before sending images Velami cannot read (HEIC, TIFF, SVG, AVIF) |
 | `language` | `auto`, `en`, `it`, `ru` | Interface language |
 | `dictionary` | list of `{ term, type }` | Terms always hidden: client names, projects, internal codes. `type` is `PERSON`, `ORG`, `ADDRESS` or `CUSTOM`. Added to the personal dictionary, the user cannot remove them. Up to 5000 terms |
+| `columns` | list of `{ header, type }` | Excel columns that are always hidden entirely, matched by header name regardless of case: every distinct value gets its own label, equal values share one. `type` is `ORG`, `PERSON` or `CUSTOM` and sets the kind of label. The user sees them ticked and greyed out in the file dialog. Up to 300 headers |
 | `allowExclusions` | boolean | `false`: the user cannot untick a found value, everything found is always hidden |
 | `allowOriginalFiles` | boolean | `false`: a PDF or Office file with personal data can go only as the clean copy |
 | `allowUncheckedFiles` | boolean | `false`: files Velami cannot check (images in unsupported formats, password protected and unknown files) are not sent |
@@ -37,9 +39,15 @@ Typical strict policy for a small office:
   "allowExclusions": false,
   "allowOriginalFiles": false,
   "allowUncheckedFiles": false,
+  "orgs": true,
   "dictionary": [
     { "term": "Bianchi Holding", "type": "ORG" },
     { "term": "Progetto Fenice", "type": "CUSTOM" }
+  ],
+  "columns": [
+    { "header": "Cliente", "type": "ORG" },
+    { "header": "Ragione sociale", "type": "ORG" },
+    { "header": "Reparto", "type": "CUSTOM" }
   ]
 }
 ```
@@ -79,6 +87,10 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\Software\Policies\Google\Chrome\3rdparty\extensions\<VELAMI_ID>\policy\dictionary\2]
 "term"="Progetto Fenice"
 "type"="CUSTOM"
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Google\Chrome\3rdparty\extensions\<VELAMI_ID>\policy\columns\1]
+"header"="Cliente"
+"type"="ORG"
 ```
 
 In Intune the same keys go through a custom OMA-URI profile or a PowerShell script that writes
@@ -106,6 +118,10 @@ Configuration profile for the `com.google.Chrome` domain, key `3rdparty`:
       <array>
         <dict><key>term</key><string>Bianchi Holding</string><key>type</key><string>ORG</string></dict>
         <dict><key>term</key><string>Progetto Fenice</string><key>type</key><string>CUSTOM</string></dict>
+      </array>
+      <key>columns</key>
+      <array>
+        <dict><key>header</key><string>Cliente</string><key>type</key><string>ORG</string></dict>
       </array>
     </dict>
   </dict>

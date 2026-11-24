@@ -31,7 +31,7 @@
   const DICT_TYPES = ['PERSON', 'ORG', 'ADDRESS', 'CUSTOM'];
   const PRIORITY = {
     SECRET: 100, DICT: 90, IBAN: 80, OMS: 76, CARD: 75, CF: 70, EMAIL: 65, SNILS: 60,
-    INN: 58, PIVA: 57, PASSPORT: 55, IDDOC: 55, DOB: 54, PHONE: 50, PLATE: 45, IP: 40, ADDRESS: 35, PERSON: 34, MODEL: 30,
+    INN: 58, PIVA: 57, PASSPORT: 55, IDDOC: 55, DOB: 54, PHONE: 50, PLATE: 45, IP: 40, ORG: 36, ADDRESS: 35, PERSON: 34, MODEL: 30,
   };
 
   const TOKEN_SOURCE = '\\[\\[\\s*([A-Z]+(?:_[A-Z]+)*)[_ ](\\d+)\\s*\\]\\]';
@@ -232,8 +232,74 @@
     { type: 'PERSON', re: new RegExp(`(?<![\\p{L}\\p{N}.])[А-ЯЁ]\\.[ \\t\\u00a0]?[А-ЯЁ]\\.[ \\t\\u00a0]?${RU_WORD}(?![\\p{L}\\p{N}])`, 'gu') },
   ];
 
+  /* Организации по организационно-правовой форме: «ООО «Ромашка»», «Rossi S.r.l.», «Acme Ltd»,
+     «Contoso GmbH». В русском форма стоит перед названием, в остальных языках после. Названия без
+     формы («Сбербанк», «Northwind Traders») находит модель; правило работает и без неё, в том числе
+     в длинных таблицах, где у модели кончается бюджет. Внутри названия только пробелы: табуляция
+     разделяет ячейки таблицы, и соседняя ячейка в название не входит. */
+  const SP = '[ \\u00a0]+';
+  const QUOTED = '[«"„“][^»"“”\\n\\t]{1,80}[»"“”]';
+  const RU_LEGAL = '(?:ООО|ОАО|ЗАО|ПАО|АО|НАО|НКО|АНО|ГУП|МУП|ФГУП|ФГБУ|ГБУ|ГКУ|МБУ|ТОО|ТОВ|ПрАТ|СНТ|ТСЖ|ЖСК|КФХ'
+    + `|Общество${SP}с${SP}ограниченной${SP}ответственностью|(?:Публичное|Закрытое|Открытое|Непубличное)${SP}акционерное${SP}общество|Акционерное${SP}общество)`;
+  const RU_GENERIC = `(?:Банк|Группа(?:${SP}компаний)?|ГК|Компания|Корпорация|Холдинг|Фонд|Торговый${SP}дом|ТД|Агентство|Завод|Фабрика|Сеть|Клиника|Студия|Бюро)`;
+  const RU_ORG_NAME = `[А-ЯЁA-Z][\\p{L}\\p{N}-]*(?:${SP}[А-ЯЁA-Z\\d][\\p{L}\\p{N}-]*){0,3}`;
+  const ORG_WORD = "[\\p{Lu}][\\p{L}\\p{N}'’&-]*(?:\\.[\\p{L}\\p{N}'’&-]+)*";
+  /* Союзы «e», «and», «и» в связки не входят: иначе два соседних названия слипаются в одно. */
+  const ORG_LINK = '(?:di|del|della|dei|degli|delle|&|of|the|de|la|le|du|des|von|van|der|den)';
+  const ORG_NAME = `${ORG_WORD}(?:${SP}(?:${ORG_WORD}|${ORG_LINK})){0,4}`;
+  const ORG_SUFFIX = '(?:' + [
+    /* С точками в любом регистре; без точек только так, как пишут на бланках («Spa» без точек
+       остаётся словом spa). */
+    '[Ss]\\.[ ]?[Rr]\\.[ ]?[Ll]\\.?(?:[ ]?[Ss]\\.?)?|SRLS?|Srls?|srls?',
+    '[Ss]\\.[ ]?[Pp]\\.[ ]?[Aa]\\.?|SPA|SpA|spa',
+    '[Ss]\\.[ ]?[Aa]\\.[ ]?[Ss]\\.?|SAS|Sas|sas',
+    '[Ss]\\.[ ]?[Nn]\\.[ ]?[Cc]\\.?|SNC|Snc|snc',
+    '[Ss]\\.[ ]?[Cc]\\.[ ]?[Aa]\\.?[ ]?[Rr]\\.[ ]?[Ll]\\.?|SCARL|Scarl',
+    '[Ss]\\.[ ]?[Cc]\\.[ ]?[Pp]\\.[ ]?[Aa]\\.?|SCPA|Scpa',
+    '[Ss]\\.[ ]?[Aa]\\.[ ]?[Pp]\\.[ ]?[Aa]\\.?|SAPA|Sapa',
+    'S\\.s\\.|S\\.c\\.|S\\.t\\.p\\.|S\\.c\\.s\\.',
+    'Soc\\.[ ]?Coop\\.?(?:[ ]a[ ]r\\.?l\\.?)?|Società[ ]Cooperativa(?:[ ]Sociale)?',
+    'Ltd\\.?|LTD|Limited|LLC|L\\.L\\.C\\.|LLP|L\\.P\\.|LP|Inc\\.?|INC|Incorporated|Corp\\.?|Corporation|PLC|plc|Holdings?|Co\\.|Pty\\.?[ ]?Ltd\\.?|Pvt\\.?[ ]?Ltd\\.?',
+    'GmbH(?:[ ]?&[ ]?Co\\.?[ ]?KGaA|[ ]?&[ ]?Co\\.?[ ]?KG)?|gGmbH|mbH|AG|KG|KGaA|UG|e\\.V\\.|SE',
+    'S\\.A\\.|SA|S\\.A\\.S\\.|SARL|S\\.à[ ]?r\\.l\\.|S\\.A\\.R\\.L\\.|B\\.V\\.|BV|N\\.V\\.|NV|Oy|Oyj|AB|A/S|ApS|AS|ASA|Sp\\.[ ]?z[ ]?o\\.[ ]?o\\.|S\\.L\\.|SL|S\\.L\\.U\\.|Lda\\.?|Ltda\\.?|d\\.o\\.o\\.|s\\.r\\.o\\.|a\\.s\\.|Kft\\.?|Zrt\\.?|Nyrt\\.?|OÜ|SIA|UAB|OOO|ZAO|PAO|AO',
+  ].join('|') + ')';
+  /* «Bianchi & Figli», «Smith & Sons»: форма из союза и слова цепляется к одной фамилии, а не к целой
+     фразе, иначе в название попадает глагол перед ним («Contattare Bianchi & Figli»). */
+  const AMP_SUFFIX = '&[ ]?(?:C\\.|Figli|F\\.lli|Co\\.?|Sons|Partners|Associati|Associates)';
+  const AMP_NAME = ORG_WORD;
+  const IT_PREFIX = '(?:F\\.lli|Fratelli|Ditta|Impresa|Studio[ ](?:Legale|Associato|Notarile|Tecnico|Commerciale|Dentistico|Medico)|Cooperativa(?:[ ]Sociale)?|Fondazione)';
+  /* Слово перед названием, с которого начинается предложение или обращение: «Spettabile Rossi S.r.l.»,
+     «Yesterday Acme Ltd announced». В название не входит. */
+  const ORG_STARTERS = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'for', 'with', 'from', 'to', 'by', 'and', 'or', 'but', 'yesterday', 'today',
+    'tomorrow', 'meanwhile', 'however', 'also', 'now', 'then', 'we', 'i', 'he', 'she', 'they', 'it', 'our', 'my', 'your', 'his', 'her', 'their',
+    'dear', 'hello', 'hi', 'il', 'la', 'lo', 'le', 'gli', 'un', 'una', 'uno', 'ieri', 'oggi', 'domani', 'poi', 'inoltre', 'con', 'per', 'da',
+    'di', 'su', 'tra', 'fra', 'e', 'ma', 'anche', 'noi', 'io', 'lui', 'lei', 'ecco', 'se', 'quando', 'come', 'gentile', 'spettabile', 'spett.le',
+    'egregio', 'egregia', 'ciao', 'buongiorno', 'buonasera', 'salve', 'cliente', 'fornitore', 'azienda', 'società', 'ditta', 'client', 'customer',
+    'supplier', 'company', 'vendor', 'contragent', 'counterparty']);
+  const ORG_ANCHORED = new RegExp(`^${ORG_NAME}${SP}${ORG_SUFFIX}(?:${SP}(?:${ORG_SUFFIX}|${AMP_SUFFIX}))*$`, 'u');
+  function refineOrg(m) {
+    const end = m.index + m[0].length;
+    let start = m.index;
+    for (;;) {
+      const rest = m.input.slice(start, end);
+      const w = /^\S+/.exec(rest)[0];
+      const gap = /^[ \u00a0]+/.exec(rest.slice(w.length));
+      if (!gap || !ORG_STARTERS.has(w.toLowerCase())) break;
+      start += w.length + gap[0].length;
+    }
+    return ORG_ANCHORED.test(m.input.slice(start, end)) ? { start, end } : null;
+  }
+  const ORG_RULES = [
+    { type: 'ORG', re: new RegExp(`(?<![\\p{L}\\p{N}])${RU_LEGAL}(?:${SP}?${QUOTED}|${SP}${RU_ORG_NAME})(?![\\p{L}\\p{N}])`, 'gu') },
+    { type: 'ORG', re: new RegExp(`(?<![\\p{L}\\p{N}])${RU_GENERIC}${SP}?${QUOTED}`, 'gu') },
+    { type: 'ORG', re: new RegExp(`(?<![\\p{L}\\p{N}&.])${ORG_NAME}${SP}${ORG_SUFFIX}(?:${SP}${ORG_SUFFIX})*(?![\\p{L}\\p{N}])`, 'gu'), refine: refineOrg },
+    { type: 'ORG', re: new RegExp(`(?<![\\p{L}\\p{N}&.])${AMP_NAME}${SP}${AMP_SUFFIX}(?:${SP}${ORG_SUFFIX})*(?![\\p{L}\\p{N}])`, 'gu') },
+    { type: 'ORG', re: new RegExp(`(?<![\\p{L}\\p{N}])${IT_PREFIX}${SP}${ORG_NAME}(?![\\p{L}\\p{N}])`, 'gu') },
+  ];
+
   const RULES = [
     ...PERSON_RULES,
+    ...ORG_RULES,
     { type: 'SECRET', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g },
     { type: 'SECRET', re: /\bsk-(?:proj-|ant-[a-z0-9]{2,8}-)?[A-Za-z0-9_-]{20,}/g },
     { type: 'SECRET', re: /\bglpat-[A-Za-z0-9_-]{20,}/g },
@@ -306,6 +372,8 @@
       case 'IBAN': case 'CF': return alnumUpper(value);
       case 'CARD': case 'PHONE': case 'SNILS': case 'INN': case 'PIVA': case 'OMS': return digitsOf(value);
       case 'PASSPORT': case 'IDDOC': case 'PLATE': return alnumUpper(value.replace(/[АВЕКМНОРСТУХ]/g, (c) => 'ABEKMHOPCTYX'['АВЕКМНОРСТУХ'.indexOf(c)]));
+      /* Вид кавычек, лишние пробелы и регистр не делают из одной организации две. */
+      case 'ORG': return value.toLowerCase().replace(/[«»"„“”]/g, '"').replace(/\s+/g, ' ');
       default: return value;
     }
   }
@@ -313,24 +381,40 @@
   const CYR_ENDINGS = '(?:а|я|у|ю|е|и|ы|ой|ей|ом|ем|ым|им|ою|ею|ах|ях|ам|ям|ами|ями|ых|их)?';
   const CYR_STEM = /(?:ами|ями|ого|его|ому|ему|ой|ей|ом|ем|ым|им|ою|ею|ах|ях|ам|ям|ых|их|а|я|у|ю|е|и|ы)$/i;
   const dictCache = new Map();
+  const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   /* stem: термин взят из текста в любом падеже (так его находит модель), поэтому окончание
-     отрезается, если основа остаётся не короче 3 букв. Словарь пользователя пишется в именительном. */
+     отрезается, если основа остаётся не короче 3 букв. Словарь пользователя пишется в именительном.
+     probe: буквы и цифры, с которых начинается термин, в нижнем регистре. По ним термин находится
+     в указателе слов текста, и регулярное выражение (sticky) проверяет только эти места: словарь
+     из тысяч значений таблицы на длинном тексте иначе занимал бы секунды. */
   function dictRegex(term, stem = false) {
     const cacheKey = (stem ? '~' : '') + term;
-    let re = dictCache.get(cacheKey);
-    if (re) return re;
-    const parts = term.split(/\s+/).map((w) => {
-      if (!/[А-Яа-яЁё]/.test(w) || w.length < 4) return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let hit = dictCache.get(cacheKey);
+    if (hit) return hit;
+    let probe = '';
+    const parts = term.split(/\s+/).map((w, i) => {
       let base = w;
-      if (stem) {
+      const cyr = /[А-Яа-яЁё]/.test(w) && w.length >= 4;
+      if (cyr && stem) {
         const cut = base.replace(CYR_STEM, '');
         if (cut.length >= 3) base = cut;
       }
-      return base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + CYR_ENDINGS;
+      if (i === 0) probe = (/^[\p{L}\p{N}]+/u.exec(base.toLowerCase()) || [''])[0];
+      return reEsc(base).replace(/[«»"„“”]/g, '[«»"„“”]') + (cyr ? CYR_ENDINGS : '');
     });
-    re = new RegExp('(?<![\\p{L}\\p{N}])' + parts.join('\\s+') + '(?![\\p{L}\\p{N}])', 'giu');
-    dictCache.set(cacheKey, re);
-    return re;
+    const src = '(?<![\\p{L}\\p{N}])' + parts.join('\\s+') + '(?![\\p{L}\\p{N}])';
+    hit = { sticky: new RegExp(src, 'iuy'), probe, get re() { return this.global || (this.global = new RegExp(src, 'giu')); } };
+    if (dictCache.size > 20000) dictCache.clear();
+    dictCache.set(cacheKey, hit);
+    return hit;
+  }
+
+  const WORD_RUN = /[\p{L}\p{N}]+/gu;
+  /* Слово текста с отрезанным русским окончанием (1–3 буквы): так находится основа термина. */
+  function probeKeys(word) {
+    const keys = [word];
+    if (/[а-яё]/.test(word)) for (let n = 1; n <= 3 && word.length - n >= 3; n++) keys.push(word.slice(0, -n));
+    return keys;
   }
 
   /* Как ещё может встретиться в тексте имя, которое нашла модель: «Олег Викторович» после
@@ -365,20 +449,48 @@
      приоритетом: точные правила (IBAN, e-mail…) внутри такого фрагмента важнее. */
   function dictionaryMatches(text, dictionary, auto = false) {
     const out = [];
-    for (const entry of dictionary || []) {
+    if (!dictionary || !dictionary.length) return out;
+    /* Если при понижении регистра сдвинулись позиции (редкие буквы вроде İ), быстрый поиск не годится. */
+    const lower = text.toLowerCase();
+    const fast = lower.length === text.length;
+    const push = (entry, type, term, m) => {
+      const f = {
+        type, start: m.index, end: m.index + m[0].length, value: m[0],
+        key: type === 'ORG' ? normKey('ORG', term) : term.toLowerCase(), canonical: term, priority: auto ? PRIORITY.MODEL : PRIORITY.DICT,
+      };
+      if (auto) { f.source = 'model'; f.score = entry.score; }
+      else if (entry.column) f.source = 'column';
+      out.push(f);
+    };
+    const index = new Map();
+    let m;
+    for (const entry of dictionary) {
       const term = String(entry.term || '').trim();
       if (term.length < 2) continue;
       const type = DICT_TYPES.includes(entry.type) ? entry.type : 'CUSTOM';
-      const re = dictRegex(term, auto);
+      const hit = dictRegex(term, auto);
+      if (fast && hit.probe) {
+        const list = index.get(hit.probe);
+        const item = { entry, type, term, sticky: hit.sticky };
+        if (list) list.push(item); else index.set(hit.probe, [item]);
+        continue;
+      }
+      const re = hit.re;
       re.lastIndex = 0;
-      let m;
-      while ((m = re.exec(text))) {
-        const f = {
-          type, start: m.index, end: m.index + m[0].length, value: m[0],
-          key: term.toLowerCase(), canonical: term, priority: auto ? PRIORITY.MODEL : PRIORITY.DICT,
-        };
-        if (auto) { f.source = 'model'; f.score = entry.score; }
-        out.push(f);
+      while ((m = re.exec(text))) push(entry, type, term, m);
+    }
+    if (!index.size) return out;
+    /* Один проход по словам текста: у каждого слова ищутся термины, которые с него начинаются. */
+    WORD_RUN.lastIndex = 0;
+    let w;
+    while ((w = WORD_RUN.exec(lower))) {
+      for (const key of probeKeys(w[0])) {
+        const list = index.get(key);
+        if (!list) continue;
+        for (const it of list) {
+          it.sticky.lastIndex = w.index;
+          if ((m = it.sticky.exec(text))) push(it.entry, it.type, it.term, m);
+        }
       }
     }
     return out;
@@ -394,9 +506,12 @@
 
   const overlaps = (a, b) => a.start < b.end && b.start < a.end;
 
-  function detect(text, { dictionary = [], auto = [] } = {}) {
+  /* orgs: искать ли организации правилами и моделью. Словарь (пользователя, организации, колонок
+     таблицы) работает всегда. */
+  function detect(text, { dictionary = [], auto = [], orgs = true } = {}) {
     const found = [];
     for (const rule of RULES) {
+      if (rule.type === 'ORG' && !orgs) continue;
       rule.re.lastIndex = 0;
       let m;
       while ((m = rule.re.exec(text))) {
@@ -422,13 +537,19 @@
       }
     }
     found.push(...dictionaryMatches(text, dictionary));
-    found.push(...dictionaryMatches(text, auto, true));
+    found.push(...dictionaryMatches(text, orgs ? auto : auto.filter((a) => a.type !== 'ORG'), true));
 
-    const guard = tokenSpans(text);
+    /* Занятые позиции: готовые метки и уже выбранные находки. Таблица на десятки тысяч ячеек даёт
+       столько же находок, попарное сравнение здесь не годится. */
+    const taken = new Uint8Array(text.length);
+    const free = (s, e) => { for (let i = s; i < e; i++) if (taken[i]) return false; return true; };
+    const occupy = (s, e) => { for (let i = s; i < e; i++) taken[i] = 1; };
+    for (const g of tokenSpans(text)) occupy(g.start, g.end);
     found.sort((a, b) => b.priority - a.priority || (b.end - b.start) - (a.end - a.start) || a.start - b.start);
     const chosen = [];
     for (const f of found) {
-      if (guard.some((g) => overlaps(f, g)) || chosen.some((c) => overlaps(f, c))) continue;
+      if (!free(f.start, f.end)) continue;
+      occupy(f.start, f.end);
       chosen.push(f);
     }
     chosen.sort((a, b) => a.start - b.start);
@@ -494,16 +615,16 @@
   }
 
   function maskText(text, opts = {}) {
-    return applyFindings(text, detect(text, { dictionary: opts.dictionary, auto: opts.auto }), opts);
+    return applyFindings(text, detect(text, { dictionary: opts.dictionary, auto: opts.auto, orgs: opts.orgs }), opts);
   }
 
   /* Известные значения: то, что детектор нашёл в набранном пользователем тексте. Их ищем в любых
      исходящих данных сайта буквально, без общего поиска, чтобы не портить служебные токены. */
-  function candidatesFrom(texts, { dictionary = [], auto = [], exclusions = [], vaultData = null } = {}) {
+  function candidatesFrom(texts, { dictionary = [], auto = [], orgs = true, exclusions = [], vaultData = null } = {}) {
     const excl = new Set(exclusions);
     const map = new Map();
     for (const t of texts) {
-      for (const f of detect(String(t), { dictionary, auto })) {
+      for (const f of detect(String(t), { dictionary, auto, orgs })) {
         if (!excl.has(f.id)) map.set(f.id + '\u0000' + f.value, { id: f.id, type: f.type, value: f.value, canonical: f.canonical });
       }
     }

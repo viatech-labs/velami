@@ -25,6 +25,19 @@ test('Excel: листы, ячейки на своих местах, общие �
   assert.match(r.text, /^\[Note\]\n\tChiamare il \+39 347 123 4567$/m);
 });
 
+test('Excel: колонки с заголовками и текстовыми значениями, без чисел и дат, одинаковые заголовки с разных листов вместе', async () => {
+  const r = await read('vendite.xlsx');
+  assert.match(r.text, /^Rossi S\.r\.l\.\tNord Ovest\tMario Rossi\t1200\t2026-03-01\tPagamento a 30 gg$/m);
+  assert.deepStrictEqual(r.columns.map((c) => c.header), ['Cliente', 'Reparto', 'Agente', 'Note']);
+  const cliente = r.columns[0];
+  assert.deepStrictEqual(cliente.values, ['Rossi S.r.l.', 'Alfa Trading', 'ROSSI S.R.L.', 'Bianchi & Figli S.n.c.']);
+  assert.strictEqual(cliente.cells, 5, 'строка листа Resi тоже посчитана');
+  assert.deepStrictEqual(r.columns[1].values, ['Nord Ovest', 'Centro', 'Sud']);
+  const simple = await read('clienti.xlsx');
+  assert.deepStrictEqual(simple.columns.map((c) => c.header), ['Nome', 'Email', 'IBAN'], 'колонка Importo из чисел не попадает');
+  assert.strictEqual((await read('richiesta.docx')).columns, undefined, 'колонки только у таблиц Excel');
+});
+
 test('PowerPoint: текст из нескольких фрагментов склеивается в строку', async () => {
   const r = await read('presentazione.pptx');
   assert.match(r.text, /^Cliente: Mario Rossi\nContatto mario\.rossi@example\.com\n/);

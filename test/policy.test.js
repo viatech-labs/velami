@@ -76,9 +76,24 @@ test('длинные строки обрезаются, словарь огра�
 test('схема для администратора описывает все ключи политики', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'managed-schema.json'), 'utf8'));
   const keys = Object.keys(schema.properties).sort();
-  const expected = [...P.LOCKABLE, 'organization', 'supportContact', 'dictionary', 'allowExclusions', 'allowOriginalFiles', 'allowUncheckedFiles'].sort();
+  const expected = [...P.LOCKABLE, 'organization', 'supportContact', 'dictionary', 'columns', 'allowExclusions', 'allowOriginalFiles', 'allowUncheckedFiles'].sort();
   assert.deepStrictEqual(keys, expected);
   for (const k of keys) assert.ok(schema.properties[k].title, 'нет title у ' + k);
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
   assert.strictEqual(manifest.storage.managed_schema, 'managed-schema.json');
+});
+
+test('колонки организации всегда отмечены, личные остаются, повторы по заголовку убираются', () => {
+  const p = P.normalize({ columns: ['Cliente', { header: '  Контрагент ', type: 'ORG' }, { header: 'cliente', type: 'PERSON' }, 42, ''] });
+  assert.deepStrictEqual(p.columns, [{ header: 'cliente', on: true, type: 'CUSTOM' }, { header: 'контрагент', on: true, type: 'ORG' }]);
+  assert.strictEqual(p.managed, true);
+  const s = P.apply({ ...user, columns: [{ header: 'cliente', on: false, type: 'CUSTOM' }, { header: 'manager', on: true, type: 'PERSON' }] }, p);
+  assert.deepStrictEqual(s.columns, [
+    { header: 'cliente', on: true, type: 'CUSTOM', managed: true },
+    { header: 'контрагент', on: true, type: 'ORG', managed: true },
+    { header: 'manager', on: true, type: 'PERSON' },
+  ]);
+  assert.strictEqual(P.isLocked(p, 'columns'), false);
+  assert.strictEqual(P.isLocked(P.normalize({ orgs: false }), 'orgs'), true);
+  assert.strictEqual(P.apply(user, P.normalize({ orgs: false })).orgs, false);
 });

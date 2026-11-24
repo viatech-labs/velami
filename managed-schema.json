@@ -26,6 +26,23 @@
       "description": "false turns the local model off, for example on computers with little memory. Not set: the user decides.",
       "type": "boolean"
     },
+    "orgs": {
+      "title": "Hide organization names",
+      "description": "true always hides company and organization names found by the legal-form rules and the local model, false never does. Not set: the user decides.",
+      "type": "boolean"
+    },
+    "columns": {
+      "title": "Table columns always hidden in files",
+      "description": "Column headers (case-insensitive) whose every value is replaced in attached spreadsheets, for example Customer, Counterparty, Department. type: ORG, PERSON or CUSTOM.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "header": { "type": "string" },
+          "type": { "type": "string", "enum": ["PERSON", "ORG", "ADDRESS", "CUSTOM"] }
+        }
+      }
+    },
     "askImages": {
       "title": "Ask before sending images Velami cannot read (HEIC, TIFF, SVG, AVIF)",
       "description": "Not set: the user decides.",

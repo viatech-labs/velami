@@ -49,8 +49,21 @@ and identity cards (RU, IT), health insurance numbers, date of birth, car plates
 **Names and addresses:** a local GLiNER model (English, Italian, Russian) plus rules for full
 Russian names and street addresses. See [docs/MODEL.md](docs/MODEL.md) for accuracy figures.
 
+**Companies and organisations:** rules by legal form (`ООО «Ромашка»`, `Rossi S.r.l.`, `Acme Ltd`,
+`Contoso GmbH`, more than forty forms across RU, IT, EN, DE, FR, ES, NL, PL and the Nordics) plus the same
+local model with the `organization` label. The whole span including the legal form becomes one
+`[[ORG_n]]` label, the same name in any case or quotes gets the same label. Public bodies (tax
+agencies, ministries, courts), AI services and common software are left as they are: the answer
+would make no sense without them and they are nobody's secret. Can be switched off in the popup.
+
 **Your dictionary:** clients, projects, internal codes. Checked before the model, with Russian
 case endings.
+
+**Whole spreadsheet columns:** when an Excel file has a column of counterparties, departments or
+managers, Velami offers to hide it entirely. Every distinct value gets its own label, equal values
+share one, and a value from the column is hidden wherever else it appears in the workbook, in a
+note or on another sheet. Columns are suggested by their header, by what was already found in them
+and by your earlier choice, which is remembered by header name. A policy can make columns mandatory.
 
 **Files:** text files are cleaned in place. Word, Excel and PowerPoint are read locally in full,
 including metadata, comments and their authors, tracked changes, fields, links, charts and embedded
@@ -164,7 +177,7 @@ All tests use made-up data only. The interface is in English, Italian and Russia
 The clean PDF copy is made of page images with a text layer, so links, forms, attachments and
 vector quality are not kept, and PDF over 30 pages goes out as a text copy. Text on images is recognized automatically and can be
 misread, faces, signatures and handwriting are not recognized. HEIC, TIFF, SVG and AVIF images and
-old `.doc` and `.xls` are not parsed. The model misses some names and addresses and
+old `.doc` and `.xls` are not parsed. The model misses some names, addresses and organisations and
 sometimes flags too much. While loaded it uses about 250 MB of memory, and the package is about
 198 MB. Interception follows each site's current API and will break if a site changes it, the
 coverage check will tell you.

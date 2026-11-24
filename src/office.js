@@ -145,8 +145,43 @@
   };
   const runs = (xml) => [...xml.matchAll(/<t(?:\s[^>]*)?>([^<]*)<\/t>/g)].map((m) => unxml(m[1])).join('');
 
+  /* Колонки таблицы: заголовок из первой непустой строки листа и все текстовые значения под ним.
+     Числа, даты и пустые ячейки не считаются: такую колонку скрывать целиком незачем. Одинаковые
+     заголовки на разных листах объединяются в одну колонку. */
+  const MAX_COLUMNS = 60;
+  const MAX_COLUMN_VALUES = 5000;
+  const MAX_COLUMN_VALUE = 200;
+  const NUMERIC = /^[-+]?[\d\s.,]+%?$|^\d{1,4}[./-]\d{1,2}[./-]\d{1,4}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$|^(?:true|false|sì|si|no|yes|да|нет)$/i;
+  function collectColumns(rows, columns) {
+    const headerAt = rows.findIndex((r) => r.filter(Boolean).length >= 2);
+    if (headerAt < 0) return;
+    const header = rows[headerAt];
+    for (let i = 0; i < header.length; i++) {
+      const name = (header[i] || '').trim();
+      if (!name || !/\p{L}/u.test(name)) continue;
+      const key = name.replace(/\s+/g, ' ').toLowerCase();
+      let col = columns.get(key);
+      if (!col) {
+        if (columns.size >= MAX_COLUMNS) continue;
+        col = { header: name.replace(/\s+/g, ' '), values: new Set(), cells: 0, text: 0 };
+        columns.set(key, col);
+      }
+      for (let r = headerAt + 1; r < rows.length; r++) {
+        const v = (rows[r][i] || '').trim();
+        if (!v) continue;
+        col.cells++;
+        if (v.length < 2 || v.length > MAX_COLUMN_VALUE || !/\p{L}/u.test(v) || NUMERIC.test(v)) continue;
+        col.text++;
+        if (col.values.size < MAX_COLUMN_VALUES) col.values.add(v);
+      }
+    }
+  }
+  const columnsOut = (columns) => [...columns.values()]
+    .filter((c) => c.text > 0)
+    .map((c) => ({ header: c.header, values: [...c.values], cells: c.cells, text: c.text }));
+
   /* Excel: каждый лист отдельным блоком, строки построчно, ячейки через табуляцию на своих местах. */
-  async function xlsx(zip) {
+  async function xlsx(zip, columns = null) {
     const shared = [];
     const sst = await zip.read('xl/sharedStrings.xml');
     if (sst) for (const m of sst.matchAll(/<si>([\s\S]*?)<\/si>/g)) shared.push(runs(m[1]));
@@ -181,9 +216,10 @@
           const at = colIndex((attrs.match(/\br="([^"]+)"/) || [])[1]);
           cells[at >= 0 ? at : cells.length] = value.replace(/[\t\n]+/g, ' ');
         }
-        if (cells.length) rows.push(Array.from(cells, (x) => x || '').join('\t'));
+        if (cells.length) rows.push(Array.from(cells, (x) => x || ''));
       }
-      if (rows.length) out.push(`[${sheet.name}]\n` + rows.join('\n'));
+      if (columns) collectColumns(rows, columns);
+      if (rows.length) out.push(`[${sheet.name}]\n` + rows.map((r) => r.join('\t')).join('\n'));
     }
     return out.join('\n\n');
   }
@@ -585,7 +621,8 @@
   async function extract(bytes, name, { ocr } = {}) {
     const kind = kindOf(name);
     if (!kind) throw new Error('unsupported');
-    const text = await KINDS[kind](opener(bytes));
+    const columns = kind === 'xlsx' ? new Map() : null;
+    const text = await KINDS[kind](opener(bytes), columns);
     const p = await plan(bytes, kind);
     const hidden = [...new Set(unitsOf(p).filter((u) => !u.covered).map((u) => u.text.trim()).filter((t) => t.length > 1))];
     const info = { ...p.info, imagesRead: 0 };
@@ -597,7 +634,9 @@
         if (t.trim()) hidden.push(t.trim());
       }
     }
-    return { kind, text: hidden.length ? text + '\n\n' + hidden.join('\n') : text, ...info };
+    const out = { kind, text: hidden.length ? text + '\n\n' + hidden.join('\n') : text, ...info };
+    if (columns && columns.size) out.columns = columnsOut(columns);
+    return out;
   }
 
   /* Очищенная копия в том же формате. values: найденные значения с метками ({id, type, value, token}),

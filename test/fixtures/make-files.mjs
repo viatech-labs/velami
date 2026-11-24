@@ -36,6 +36,20 @@ ws2 = wb.create_sheet('Note')
 ws2['B2'] = 'Chiamare il +39 347 123 4567'
 wb.save(os.path.join(d, 'clienti.xlsx'))
 
+# Таблица продаж с колонками-контрагентами: один клиент в разном регистре, название клиента и в
+# примечании, второй лист с тем же заголовком «Cliente».
+wb = Workbook()
+ws = wb.active; ws.title = 'Vendite'
+ws.append(['Cliente', 'Reparto', 'Agente', 'Importo', 'Data', 'Note'])
+ws.append(['Rossi S.r.l.', 'Nord Ovest', 'Mario Rossi', 1200, '2026-03-01', 'Pagamento a 30 gg'])
+ws.append(['Alfa Trading', 'Nord Ovest', 'Giulia Bianchi', 850.5, '2026-03-02', 'Riordino Alfa Trading a marzo'])
+ws.append(['ROSSI S.R.L.', 'Centro', 'Mario Rossi', 400, '2026-03-05', None])
+ws.append(['Bianchi & Figli S.n.c.', 'Sud', 'Luca Verdi', 2300, '2026-03-09', 'Contattare Bianchi & Figli'])
+ws2 = wb.create_sheet('Resi')
+ws2.append(['Cliente', 'Importo'])
+ws2.append(['Alfa Trading', -120])
+wb.save(os.path.join(d, 'vendite.xlsx'))
+
 # Настоящая презентация: сайты (DeepSeek) отказываются разбирать пакет без связей и мастер-слайда.
 # Адрес почты разбит на два фрагмента текста, как это делает PowerPoint после правки.
 from pptx import Presentation

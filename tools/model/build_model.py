@@ -42,7 +42,7 @@ CORPORA = {
 }
 MIN_FREQ = 3
 EMB = 'token_rep_layer.bert_layer.model.embeddings.word_embeddings.weight'
-LABELS = ['person', 'address']
+LABELS = ['person', 'address', 'organization']
 
 
 def sha256(path):

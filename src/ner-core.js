@@ -148,7 +148,60 @@
     'signore', 'signora', 'gentile', 'egregio', 'spettabile', 'dottore', 'dottoressa', 'avvocato',
     'client', 'customer', 'contact', 'user', 'owner', 'holder', 'sender', 'recipient', 'applicant', 'employee', 'dear', 'mister', 'madam',
     'клиент', 'клиентка', 'заявитель', 'получатель', 'отправитель', 'владелец', 'пользователь', 'сотрудник', 'уважаемый', 'уважаемая', 'господин', 'госпожа',
+    'самозанятый', 'самозанятая', 'ип', 'ооо', 'жена', 'муж', 'wife', 'husband', 'moglie', 'marito',
   ]);
+
+  /* Организации, которые не нужно скрывать: ИИ-сервисы и программы, о которых спрашивают, и
+     государственные органы, которые называют в вопросе о законе или процедуре. Без них ответ модели
+     теряет смысл, а чужого секрета в них нет. Названия компаний-клиентов, банков, поставщиков
+     скрываются: расширение не знает, какая из них чья. */
+  const NOT_ORGS = new Set([
+    ...NOT_PERSONS,
+    'microsoft', 'apple', 'amazon', 'aws', 'azure', 'adobe', 'oracle', 'ibm', 'nvidia', 'intel', 'amd', 'samsung', 'huawei', 'xiaomi',
+    'excel', 'word', 'outlook', 'powerpoint', 'office', 'office 365', 'microsoft 365', 'teams', 'sharepoint', 'onedrive', 'windows', 'macos', 'linux',
+    'android', 'ios', 'chrome', 'safari', 'firefox', 'edge', 'gmail', 'google sheets', 'google docs', 'google drive', 'google workspace', 'google maps',
+    'youtube', 'facebook', 'instagram', 'whatsapp', 'telegram', 'linkedin', 'twitter', 'x', 'tiktok', 'reddit', 'wikipedia', 'zoom', 'slack', 'notion',
+    'dropbox', 'salesforce', 'sap', 'hubspot', 'shopify', 'wordpress', 'stripe', 'paypal', 'visa', 'mastercard', 'amex', 'american express',
+    'python', 'javascript', 'typescript', 'java', 'node', 'react', 'docker', 'kubernetes', 'postgres', 'postgresql', 'mysql', 'mongodb', 'redis',
+    'openai', 'anthropic', 'deepmind', 'hugging face', 'stability ai', 'midjourney', 'yandex', 'яндекс', 'сбер', 'vk', 'mail.ru', '1с', '1c',
+    'битрикс', 'bitrix24', 'амо', 'amocrm', 'мой склад', 'госуслуги', 'эксель', 'ворд', 'amazon web services',
+    // Обращения к службам без названия компании: «Dear Customer Support», «Assistenza clienti».
+    'customer support', 'customer service', 'support', 'support team', 'help desk', 'helpdesk', 'assistenza', 'assistenza clienti',
+    'servizio clienti', 'служба поддержки', 'поддержка', 'техподдержка', 'доставка', 'отдел кадров', 'бухгалтерия',
+    'agenzia delle entrate', 'agenzia entrate', 'inps', 'inail', 'istat', 'consob', 'ivass', 'anac', 'garante privacy', 'garante',
+    'camera di commercio', 'guardia di finanza', 'carabinieri', 'polizia', 'questura', 'prefettura', 'motorizzazione', 'aci', 'equitalia',
+    'agenzia delle entrate-riscossione', 'banca d\'italia', 'bce', 'ue', 'unione europea', 'commissione europea', 'parlamento europeo',
+    'stato', 'governo', 'ministero', 'regione', 'provincia', 'comune', 'asl', 'ats', 'ssn', 'sistema sanitario nazionale',
+    'фнс', 'ифнс', 'налоговая', 'пфр', 'сфр', 'фсс', 'фомс', 'росстат', 'минфин', 'минтруд', 'минцифры', 'минэкономразвития', 'цб', 'цб рф',
+    'центробанк', 'банк россии', 'мфц', 'мвд', 'гибдд', 'фссп', 'фмс', 'роспотребнадзор', 'росреестр', 'роскомнадзор', 'правительство',
+    'госдума', 'совет федерации', 'администрация', 'мэрия', 'прокуратура', 'суд', 'арбитражный суд', 'верховный суд', 'конституционный суд',
+    'irs', 'hmrc', 'sec', 'fca', 'ftc', 'fbi', 'nhs', 'eu', 'un', 'nato', 'who', 'ecb', 'fed', 'federal reserve', 'european commission',
+    'european union', 'european parliament', 'companies house', 'internal revenue service', 'supreme court', 'congress', 'senate', 'parliament',
+  ]);
+  /* Государственные органы и учреждения, у которых название начинается с типа. `\b` в JS не знает
+     кириллицы, поэтому граница слова задана явно; русским основам разрешено окончание до трёх букв
+     («Минфине», «министерства», «пенсионный фонд»). */
+  const END = '(?=[^\\p{L}\\p{N}]|$)';
+  const PUBLIC_ORG = new RegExp('^(?:(?:'
+    + 'comune|regione|provincia|città metropolitana|ministero|dipartimento|agenzia (?:delle|del|per|nazionale|regionale|italiana|europea)|tribunale|procura|corte|questura|prefettura|ordine|collegio|università|politecnico|scuola|liceo|istituto comprensivo|ospedale|camera di commercio|ispettorato|ufficio|inps|inail|asl|ats|azienda sanitaria|azienda ospedaliera|guardia di finanza|polizia|carabinieri|direzione|consiglio|parlamento|senato|governo|presidenza'
+    + '|irs|hmrc|sec|fca|nhs|fbi|un|eu|nato|who|european|companies house|internal revenue|department of|ministry of|office of|city of|state of|county of|university of|court|supreme court|police|government|parliament|congress|senate|house of|bureau of|school|hospital'
+    + ')' + END + '|(?:'
+    + 'фнс|ифнс|мифнс|уфнс|пфр|сфр|фсс|мвд|умвд|гу мвд|гибдд|фссп|цб|минфин|мин(?:труд|цифры|экономразвития|здрав|обр|юст|транс|сельхоз|промторг|строй|природы|культуры|спорта|энерго|обороны|просвещения)|министерств|правительств|администраци|мэри|арбитражн|суд|прокуратур|росреестр|роспотребнадзор|роскомнадзор|госуслуг|мфц|департамент|управлени|комитет|инспекци|пенсионн|налогов|федеральн|государственн|городск|областн|районн|муниципальн|школ|гимнази|лице|детск|поликлиник|больниц|университет'
+    + ')\\p{Ll}{0,3}' + END + ')', 'iu');
+
+  /* Артикли и притяжательные слова перед названием («Il Comune di Milano», «our office»). */
+  const ORG_LEAD = /^(?:the|il|la|lo|l'|gli|le|i|our|your|their|my|his|her|its|il nostro|la nostra|il vostro|la vostra|nostro|nostra|vostro|vostra|наш|наша|наше|нашу|нашей|нашего|ваш|ваша|ваше|вашу|вашей|вашего|их|его|её) /iu;
+  /* Одна организационно-правовая форма без названия: модель иногда отдаёт только её. */
+  const LEGAL_ONLY = /^(?:ооо|оао|зао|пао|ао|ип|нко|ано|тоо|тов|s\.?r\.?l|s\.?p\.?a|s\.?a\.?s|s\.?n\.?c|s\.?s|srls|ltd|llc|inc|corp|plc|gmbh|ag|kg|sa|sarl|bv|nv|oy|ab|as|aps|spa|srl|sas|snc)\.?$/iu;
+
+  const orgKey = (value) => value.toLowerCase().replace(/[«»"„“”']/g, '').replace(/\s+/g, ' ').trim();
+  /* Есть ли ключ в стоп-листе, с учётом русских окончаний («Яндексе», «Сбером»). */
+  function orgStopped(key) {
+    if (NOT_ORGS.has(key)) return true;
+    if (!/[а-яё]$/u.test(key)) return false;
+    for (let cut = 1; cut <= 3 && key.length - cut >= 3; cut++) if (NOT_ORGS.has(key.slice(0, -cut))) return true;
+    return false;
+  }
 
   function accept(entity, text) {
     const value = text.slice(entity.start, entity.end).trim();
@@ -156,6 +209,16 @@
     if (/\[\[|\]\]/.test(value)) return null;
     const words = value.toLowerCase().split(/[\s,.&/]+/).filter((w) => w.length > 3 || NOT_PERSONS.has(w));
     if (entity.label === 'person' && words.length && words.every((w) => NOT_PERSONS.has(w) || /^(gpt|claude|gemini|llama)[-\d.]/.test(w))) return null;
+    if (entity.label === 'organization') {
+      const key = orgKey(value).replace(ORG_LEAD, '');
+      if (!key || orgStopped(key) || PUBLIC_ORG.test(key) || LEGAL_ONLY.test(key)) return null;
+      const orgWords = key.split(/[\s,.&/-]+/).filter(Boolean);
+      if (orgWords.every((w) => orgStopped(w) || /^(gpt|claude|gemini|llama)[-\d.]/.test(w))) return null;
+      /* Название пишут с заглавной буквы. Нарицательное («банк», «our office», «пункт выдачи»)
+         моделью принимается за организацию, но скрывать там нечего. */
+      const lead = value.replace(/^[«"„“'(\s]+/u, '').replace(ORG_LEAD, '');
+      if (!/^[\p{Lu}\p{N}]/u.test(lead) && !/^\p{Ll}+\p{Lu}/u.test(lead)) return null;
+    }
     return value;
   }
 
@@ -187,5 +250,5 @@
       .filter((e) => e.value);
   }
 
-  return { createTokenizer, splitWords, chunkWords, buildInputs, decode, accept, recognize, NOT_PERSONS };
+  return { createTokenizer, splitWords, chunkWords, buildInputs, decode, accept, recognize, NOT_PERSONS, NOT_ORGS };
 });

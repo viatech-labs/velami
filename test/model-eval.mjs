@@ -15,7 +15,8 @@ if (!modelBuilt()) {
   console.error('Модель не собрана: npm run model');
   process.exit(1);
 }
-const TYPES = { person: 'PERSON', address: 'ADDRESS' };
+const TYPES = { person: 'PERSON', address: 'ADDRESS', organization: 'ORG' };
+const SHOWN = new Set(Object.values(TYPES));
 const set = JSON.parse(readFileSync(path.join(root, 'test/model-set.json'), 'utf8')).items;
 const model = await loadModel();
 const stat = {};
@@ -44,7 +45,8 @@ for (const [lang, text, gold, kind = 'phrase'] of set) {
   const found = await model.recognize(text);
   times.push(performance.now() - t0);
   const g = goldSpans(text, gold);
-  const keys = [lang, kind, 'all'];
+  /* Срез org: тексты, где есть организации или ловушки для них (продукты, госорганы). */
+  const keys = [lang, kind, ...(kind === 'org' || gold.some(([t]) => t === 'ORG') ? ['org'] : []), 'all'].filter((k, i, a) => a.indexOf(k) === i);
   for (const k of keys) { stat[k] ||= { tp: 0, fp: 0, fn: 0, exact: 0, sentences: 0 }; stat[k].sentences++; }
   for (const e of found) {
     const type = TYPES[e.label];
@@ -66,7 +68,7 @@ for (const [lang, text, gold, kind = 'phrase'] of set) {
     const type = TYPES[e.label];
     for (const term of [e.value, ...(type === 'PERSON' ? PG.nameVariants(e.value) : [])]) auto.push({ term, type, score: e.score });
   }
-  const shown = PG.detect(text, { auto }).filter((f) => f.type === 'PERSON' || f.type === 'ADDRESS');
+  const shown = PG.detect(text, { auto }).filter((f) => SHOWN.has(f.type));
   const gp = goldSpans(text, gold);
   for (const k of keys) { pipe[k] ||= { tp: 0, fp: 0, fn: 0, exact: 0, sentences: 0 }; pipe[k].sentences++; }
   for (const f of shown) {
@@ -85,7 +87,7 @@ for (const [lang, text, gold, kind = 'phrase'] of set) {
 const pct = (a, b) => (b ? (100 * a / b).toFixed(0) + '%' : '—');
 console.log(`Набор: ${set.length} текстов. Порог 0.5, один поток WASM.`);
 console.log('срез    текстов  точность  полнота  точные границы');
-for (const k of ['en', 'it', 'ru', 'phrase', 'doc', 'all']) {
+for (const k of ['en', 'it', 'ru', 'phrase', 'doc', 'org', 'all']) {
   const s = stat[k];
   if (!s) continue;
   console.log(`${k.padEnd(7)} ${String(s.sentences).padStart(7)}  ${pct(s.tp, s.tp + s.fp).padStart(8)}  ${pct(s.tp, s.tp + s.fn).padStart(7)}  ${pct(s.exact, s.tp).padStart(14)}`);
@@ -95,7 +97,7 @@ console.log(`Время на фразу: медиана ${times[times.length >> 
 console.log(misses.length ? 'Ошибки модели:\n' + misses.join('\n') : 'Ошибок у модели нет.');
 console.log('\nКонвейер (правила + модель + варианты имён)');
 console.log('срез    текстов  точность  полнота');
-for (const k of ['en', 'it', 'ru', 'phrase', 'doc', 'all']) {
+for (const k of ['en', 'it', 'ru', 'phrase', 'doc', 'org', 'all']) {
   const s = pipe[k];
   if (!s) continue;
   console.log(`${k.padEnd(7)} ${String(s.sentences).padStart(7)}  ${pct(s.tp, s.tp + s.fp).padStart(8)}  ${pct(s.tp, s.tp + s.fn).padStart(7)}`);

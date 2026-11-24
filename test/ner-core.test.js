@@ -81,6 +81,25 @@ test('роль в начале строки не считается именем
   assert.equal(NER.accept(e(9, 20), 'Cliente: Mario Rossi'), 'Mario Rossi');
 });
 
+test('организации: нарицательные, госорганы, ИИ-сервисы и голая форма отбрасываются, названия остаются', () => {
+  const org = (v) => NER.accept({ label: 'organization', start: 0, end: v.length }, v);
+  for (const v of ['Rossi S.r.l.', 'ООО «Ромашка»', 'Газпром', 'Пятёрочка', 'Banca Intesa', 'Juventus', 'Deloitte LLP', 'eBay', 'Northwind Traders', 'Судостроительный завод «Север»']) {
+    assert.equal(org(v), v, v);
+  }
+  for (const v of ['банк', 'banca', 'board', 'team', 'Our office', 'пункт выдачи', 'управляющую компанию', 'vostra filiale di Torino', 'citofono Greco', 'школы № 12']) {
+    assert.equal(org(v), null, 'нарицательное: ' + v);
+  }
+  for (const v of ['Il Comune di Bologna', 'Agenzia delle Entrate', 'Пенсионный фонд', 'Минфине', 'Министерство финансов', 'ФНС России', 'IRS', 'Department of Labor', 'University of Bologna']) {
+    assert.equal(org(v), null, 'госорган: ' + v);
+  }
+  for (const v of ['ChatGPT', 'Excel', 'Google Sheets', 'Яндексе', 'Сбером', 'Amazon', 'Amazon Web Services', 'Customer Support', 'ООО', 'ИП', 'S.r.l.']) {
+    assert.equal(org(v), null, 'не скрывается: ' + v);
+  }
+  const text = 'Ho scritto a Rossi S.r.l. e a Excel';
+  assert.equal(NER.accept({ label: 'organization', start: 13, end: 25 }, text), 'Rossi S.r.l.');
+  assert.equal(NER.accept({ label: 'organization', start: 30, end: 35 }, text), null);
+});
+
 test('находки на перекрытии кусков не дублируются', async () => {
   const text = Array.from({ length: 300 }, (_, i) => (i === 150 ? 'Mario' : 'x')).join(' ');
   const run = async (words) => words.filter((w) => w.text === 'Mario').map((w) => ({ label: 'person', start: w.start, end: w.end, score: 0.9 }));

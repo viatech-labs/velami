@@ -12,9 +12,11 @@ analytics and no telemetry. We at Via-Tech, the developer, never receive any of 
 **What it does with your data.** When you write in ChatGPT (chatgpt.com, chat.openai.com), Claude
 (claude.ai), Gemini (gemini.google.com) or Perplexity (perplexity.ai), or in Microsoft Copilot,
 DeepSeek, Mistral Le Chat or Grok if you turned them on in the settings, the extension looks for personal data in your text and in the files you attach (text files, PDF, Word, Excel, PowerPoint and images, which are read on your computer, including the text on images and scanned pages):
-card numbers, IBANs, tax codes, phone numbers, e-mail addresses, keys and passwords, and names and
-addresses. Names and addresses are found by your dictionary and by a recognition model that is part
-of the extension and runs on your computer. Before the page sends anything, it replaces each value
+card numbers, IBANs, tax codes, phone numbers, e-mail addresses, keys and passwords, names,
+addresses and company names. Names, addresses and company names are found by your dictionary, by
+rules and by a recognition model that is part of the extension and runs on your computer. In an
+Excel file you can also choose whole columns to hide, the choice is kept by column header in the
+extension's settings. Before the page sends anything, it replaces each value
 with a label such as `[[EMAIL_1]]`. The chat service receives the labels. When the answer comes back,
 the extension shows the real values again, only on your screen.
 
@@ -33,7 +35,7 @@ reads it and never sends it anywhere.
 Attached files and their clean copies are not stored: they are read in memory, and the copy you open in the
 preview stays in the chat tab until you close it.
 
-The list of names and addresses found by the model is kept only in memory, for up to 30 minutes, and
+The list of names, addresses and company names found by the model is kept only in memory, for up to 30 minutes, and
 is never written to disk. A value that was actually replaced goes to the label vault like any other.
 Nothing is synced to your Google account. You can clear the log and the vault at
 any time from the extension's page, and uninstalling the extension deletes all of it.

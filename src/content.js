@@ -150,6 +150,14 @@
   .ask button.ask-more { display: block; height: auto; margin: 0 0 10px; padding: 0; background: none; color: var(--link); font-weight: 500; text-align: left; }
   .ask button.ask-more:hover { background: none; text-decoration: underline; }
   .ask button:disabled { opacity: .55; cursor: default; }
+  .ask .ask-list-title { margin: 0 0 4px; color: var(--fg-2); font-size: 12.5px; font-weight: 500; }
+  .ask .ask-list { max-height: 168px; overflow: auto; margin: 0 0 10px; background: var(--solid); border-radius: 10px; }
+  .ask .ask-list label { margin: 0; padding: 7px 10px; align-items: flex-start; color: var(--fg); font-size: 12.5px; }
+  .ask .ask-list label + label { border-top: 1px solid var(--line); }
+  .ask .ask-list label input { margin-top: 1px; flex: none; }
+  .ask .ask-list label.off { color: var(--muted); }
+  .ask .ask-list b { display: block; font-weight: 500; word-break: break-word; }
+  .ask .ask-list small { display: block; color: var(--muted); font-size: 11.5px; }
   [hidden] { display: none !important; }
 </style>
 <div class="tip" hidden></div>
@@ -159,6 +167,8 @@
     <header>${MARK}<b class="ask-title"></b></header>
     <p class="ask-text"></p>
     <p class="ask-note" hidden></p>
+    <p class="ask-list-title" hidden></p>
+    <div class="ask-list" hidden></div>
     <label class="ask-opt" hidden><input type="checkbox"><span></span></label>
     <button class="ask-more" hidden></button>
     <div class="btns"></div>
@@ -827,6 +837,7 @@
   const isReadableImage = (f) => OCR_IMAGE_MIME.test(f.type) || (!/^image\//i.test(f.type) && OCR_IMAGE.test(f.name));
   let askImages = true;
   let policy = {};
+  let rememberedColumns = [];
 
   function fileChecked({ sigs }) {
     return { checked: !enabled || (Array.isArray(sigs) && sigs.every((s) => checkedFiles.has(s))) };
@@ -841,9 +852,12 @@
   const askEl = $('.ask');
   let askChain = Promise.resolve();
 
-  /* buttons: [{ id, label, primary }]. Ответ: { choice, option }. Escape = первая кнопка без primary.
-     more: { label, busy, run } это действие, которое окно не закрывает (предпросмотр копии). */
-  function ask({ title, text, note, option, buttons, more }) {
+  /* buttons: [{ id, label, primary }]. Ответ: { choice, option, selected }. Escape = первая кнопка без primary.
+     more: { label, busy, run } это действие, которое окно не закрывает (предпросмотр копии).
+     list: { title, items: [{ id, label, hint, checked, disabled }], onChange } это список с галочками
+     (колонки таблицы); onChange({ selected, option, update }) зовётся при каждом изменении галочек,
+     update({ text, note }) меняет текст окна, не закрывая его. */
+  function ask({ title, text, note, option, buttons, more, list }) {
     const run = askChain.then(() => new Promise((resolve) => {
       askEl.querySelector('.ask-title').textContent = title;
       askEl.querySelector('.ask-text').textContent = text;
@@ -854,6 +868,38 @@
       opt.hidden = !option;
       opt.querySelector('input').checked = false;
       opt.querySelector('span').textContent = option || '';
+      const listTitle = askEl.querySelector('.ask-list-title');
+      const listEl = askEl.querySelector('.ask-list');
+      listTitle.hidden = listEl.hidden = !list;
+      listTitle.textContent = list ? list.title : '';
+      listEl.textContent = '';
+      const selected = () => [...listEl.querySelectorAll('input:checked')].map((x) => x.dataset.id);
+      const update = ({ text: t2, note: n2 } = {}) => {
+        if (t2 !== undefined) askEl.querySelector('.ask-text').textContent = t2;
+        if (n2 !== undefined) { noteEl.hidden = !n2; noteEl.textContent = n2 || ''; }
+      };
+      const changed = () => {
+        for (const label of listEl.querySelectorAll('label')) label.classList.toggle('off', !label.querySelector('input').checked);
+        if (list && list.onChange) list.onChange({ selected: selected(), option: !opt.hidden && opt.querySelector('input').checked, update });
+      };
+      for (const it of (list && list.items) || []) {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = !!it.checked;
+        input.disabled = !!it.disabled;
+        input.dataset.id = it.id;
+        input.addEventListener('change', changed);
+        const txt = document.createElement('span');
+        const b = document.createElement('b');
+        b.textContent = it.label;
+        txt.append(b);
+        if (it.hint) { const small = document.createElement('small'); small.textContent = it.hint; txt.append(small); }
+        label.classList.toggle('off', !it.checked);
+        label.append(input, txt);
+        listEl.append(label);
+      }
+      opt.querySelector('input').onchange = list ? changed : null;
       const box = askEl.querySelector('.btns');
       box.textContent = '';
       const moreEl = askEl.querySelector('.ask-more');
@@ -874,8 +920,9 @@
       const done = (choice) => {
         askEl.hidden = true;
         moreEl.onclick = null;
+        opt.querySelector('input').onchange = null;
         askEl.removeEventListener('keydown', onKey);
-        resolve({ choice, option: !opt.hidden && opt.querySelector('input').checked });
+        resolve({ choice, option: !opt.hidden && opt.querySelector('input').checked, selected: selected() });
       };
       const cancel = (buttons.find((b) => b.id === 'cancel') || buttons[0]).id;
       const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (!busy) done(cancel); } };
@@ -980,6 +1027,46 @@
   /* PDF и Office: текст достаёт offscreen-документ расширения. Если в тексте есть данные,
      пользователь выбирает: копия с метками в том же формате, оригинал или отмена. Длинный PDF
      (больше PDF_COPY_PAGES страниц) и документ, который не удалось собрать, уходят текстом. */
+  /* ---------- колонки таблицы ----------
+     В таблице данные лежат колонками: «Контрагент», «Менеджер», «Подразделение». Такую колонку
+     можно скрыть целиком: каждое значение получает свою метку, одинаковые значения одну и ту же.
+     Колонка предлагается, если в ней уже нашлись организации или имена, если заголовок говорит,
+     что там, или если человек выбирал её раньше. Выбор запоминается по имени заголовка. */
+  const COL_HINTS = [
+    ['ORG', /контрагент|клиент|покупател|поставщик|организац|компани|фирм|юр\.?\s?лиц|заказчик|плательщик|партн[её]р|cliente|clienti|fornitor|azienda|società|ragione\s+sociale|ditta|controparte|customer|client\b|company|vendor|supplier|counterpart|organi[sz]ation|partner/i],
+    ['PERSON', /менеджер|сотрудник|фио|ф\.\s?и\.\s?о|имя|фамили|ответственн|исполнител|руководител|агент|контактное|manager|employee|agente|responsabile|referente|dipendente|nome|cognome|nominativo|\bname|surname|owner|contact|contatto/i],
+    ['CUSTOM', /подразделени|отдел|департамент|филиал|дивизион|reparto|divisione|filiale|unità|department|division|branch|business unit/i],
+  ];
+  const SUGGEST_SHARE = 0.3;
+  const colKey = (header) => String(header || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 120);
+
+  function planColumns(cols, found) {
+    const remembered = new Map(rememberedColumns.map((c) => [c.header, c]));
+    const foundType = new Map(found.map((v) => [String(v.value).toLowerCase(), v.type]));
+    const out = (cols || []).map((c) => {
+      const key = colKey(c.header);
+      const mem = remembered.get(key);
+      const byType = {};
+      for (const v of c.values) { const t = foundType.get(v.toLowerCase()); if (t) byType[t] = (byType[t] || 0) + 1; }
+      const hits = Object.values(byType).reduce((a, b) => a + b, 0);
+      const share = c.values.length ? hits / c.values.length : 0;
+      const top = Object.entries(byType).sort((a, b) => b[1] - a[1])[0];
+      const hint = COL_HINTS.find(([, re]) => re.test(c.header));
+      const type = mem ? mem.type : top && share >= SUGGEST_SHARE && (top[0] === 'ORG' || top[0] === 'PERSON') ? top[0] : hint ? hint[0] : 'CUSTOM';
+      const managed = !!(mem && mem.managed);
+      const suggested = managed || (mem ? !!mem.on : share >= SUGGEST_SHARE || !!hint);
+      return { id: key, header: c.header, type, values: c.values, cells: c.cells, on: suggested, managed, suggested, remembered: !!mem };
+    });
+    return out.sort((a, b) => (b.managed - a.managed) || (b.suggested - a.suggested) || a.header.localeCompare(b.header));
+  }
+
+  const chosenColumns = (cols, ids, headersToo) => {
+    const picked = cols.filter((c) => ids.has(c.id));
+    const list = picked.map((c) => ({ header: c.header, type: c.type, values: c.values }));
+    if (headersToo && picked.length) list.push({ header: '', type: 'CUSTOM', values: picked.map((c) => c.header) });
+    return list;
+  };
+
   async function cleanDoc(f) {
     if (f.size > MAX_DOC_FILE) return askUnchecked(f, 'big', { mb: 30 });
     toast('ok', tr('file.reading', { name: f.name }), 600000);
@@ -988,13 +1075,20 @@
     if (!r || r.error) throw new Error((r && r.error) || tr('err.noReply'));
     if (r.reason) return askUnchecked(f, r.reason === 'big' ? 'big' : r.reason, { mb: 30 });
     if (!String(r.text || '').trim()) return askUnchecked(f, 'notext');
-    const m = await send({ type: 'maskBatch', texts: [r.text], trusted: [true], file: true });
-    if (!m || m.error) throw new Error((m && m.error) || tr('err.noReply'));
+    /* Прикидки (dryRun) ничего не записывают; метки создаются одним настоящим проходом при сборке копии. */
+    const pass = (columns, dryRun) => send({ type: 'maskBatch', texts: [r.text], trusted: [true], file: true, dryRun, columns }).then((x) => {
+      if (!x || x.error) throw new Error((x && x.error) || tr('err.noReply'));
+      return x;
+    });
+    let m = await pass([], true);
     if (m.disabled) return f;
+    const cols = planColumns(r.columns, m.values || []);
+    const picked = new Set(cols.filter((c) => c.on).map((c) => c.id));
+    let headersToo = false;
+    if (picked.size) m = await pass(chosenColumns(cols, picked, headersToo), true);
     const images = r.emptyPages || 0;
-    const types = typesText(m.summary);
     const unnamed = !!m.summary.model;
-    if (!m.summary.count) {
+    if (!m.summary.count && !cols.some((c) => c.suggested)) {
       if (unnamed) return askUnchecked(f, 'names');
       if (images) return askUnchecked(f, 'partial', { n: images });
       if (r.attachments) return askUnchecked(f, 'attachments', { n: r.attachments });
@@ -1009,29 +1103,65 @@
     const sameName = office ? f.name.replace(/\.(doc|xls|ppt)m$/i, (x, k) => '.' + k + 'x') : f.name;
     const copyName = f.name + '.txt';
     const noOriginal = policy.allowOriginalFiles === false;
-    /* Копия того же формата, а если собрать её не вышло или PDF длинный, текст с метками. */
+    const foundText = () => {
+      const types = typesText(m.summary);
+      const n = m.summary.count;
+      if (!n) return tr('file.doc.nothingYet', { copy: sameName });
+      return office ? tr('file.doc.foundSame', { n, types, copy: sameName })
+        : pdfSame ? tr('file.doc.foundPdf', { n, types, copy: sameName })
+          : tr('file.doc.found', { n, types, copy: copyName });
+    };
+    const noteText = () => [
+      picked.size ? tr('file.cols.note', { n: m.summary.columns || 0, k: picked.size }) : '',
+      unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
+      office && r.images > (r.imagesRead || 0) ? tr('file.doc.images', { n: r.images - (r.imagesRead || 0) }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
+      noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' ');
+    /* Копия того же формата, а если собрать её не вышло или PDF длинный, текст с метками.
+       Настоящий проход (с записью меток) делается здесь, с тем набором колонок, который выбран. */
     let built = null;
+    let final = null;
     const build = () => built || (built = (async () => {
+      final = await pass(chosenColumns(cols, picked, headersToo), false);
+      if (!final.summary.count) return null;
       let copy = null;
       if (same) {
         if (pdfSame) toast('ok', tr('file.covering', { name: f.name }), 600000);
-        const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: m.values || [] }).catch((e) => ({ error: String(e) }));
+        const c = await send({ type: 'cleanDoc', name: f.name, data: toBase64(await f.arrayBuffer()), values: final.values || [] }).catch((e) => ({ error: String(e) }));
         if (pdfSame) toastEl.hidden = true;
         if (c && !c.error && c.data) copy = { same: true, name: c.name, type: OFFICE_MIME[c.name.split('.').pop().toLowerCase()] || f.type, bytes: fromBase64(c.data), text: c.text || '' };
       }
-      copy = copy || { same: false, name: copyName, type: 'text/plain', bytes: new TextEncoder().encode(m.texts[0]), text: m.texts[0] };
+      copy = copy || { same: false, name: copyName, type: 'text/plain', bytes: new TextEncoder().encode(final.texts[0]), text: final.texts[0] };
       copy.sha256 = await fingerprint(copy.bytes);
       return copy;
     })());
+    let refreshing = Promise.resolve();
+    const onChange = ({ selected, option, update }) => {
+      picked.clear();
+      for (const id of selected) picked.add(id);
+      headersToo = option;
+      built = null;
+      refreshing = refreshing.then(async () => {
+        m = await pass(chosenColumns(cols, picked, headersToo), true);
+        update({ text: foundText(), note: noteText() });
+      }).catch((e) => toast('warn', String((e && e.message) || e), 7000));
+    };
     const choice = await ask({
-      more: { label: tr('file.preview'), busy: tr('file.previewBusy'), run: async () => openPreview(await build(), f.name, m.summary) },
+      more: {
+        label: tr('file.preview'), busy: tr('file.previewBusy'),
+        run: async () => { await refreshing; const c = await build(); if (c) await openPreview(c, f.name, final.summary); else toast('ok', tr('file.clean', { name: f.name }), 5000); },
+      },
       title: tr('file.doc.title', { name: f.name }),
-      text: office ? tr('file.doc.foundSame', { n: m.summary.count, types, copy: sameName })
-        : pdfSame ? tr('file.doc.foundPdf', { n: m.summary.count, types, copy: sameName })
-          : tr('file.doc.found', { n: m.summary.count, types, copy: copyName }),
-      note: [unnamed ? tr('file.doc.names') : '', images ? tr('file.doc.pages', { n: images }) : '', r.truncated ? tr('file.doc.truncated', { n: 500 }) : '',
-        office && r.images > (r.imagesRead || 0) ? tr('file.doc.images', { n: r.images - (r.imagesRead || 0) }) : '', office && (r.macros || r.objects) ? tr('file.doc.removed') : '',
-        noOriginal ? tr('policy.noOriginal') : ''].filter(Boolean).join(' '),
+      text: foundText(),
+      note: noteText(),
+      list: cols.length ? {
+        title: tr('file.cols.title'),
+        items: cols.map((c) => ({
+          id: c.id, label: c.header, checked: c.on, disabled: c.managed,
+          hint: I18N.label(c.type) + ' · ' + tr('file.cols.values', { n: c.values.length }) + (c.managed ? ' · ' + tr('file.cols.managed') : c.remembered ? ' · ' + tr('file.cols.remembered') : ''),
+        })),
+        onChange,
+      } : null,
+      option: cols.length ? tr('file.cols.headers') : '',
       buttons: [
         { id: 'cancel', label: tr('file.ask.cancel') },
         noOriginal ? null : { id: 'original', label: tr('file.doc.original') },
@@ -1040,12 +1170,23 @@
     });
     if (choice.choice === 'original' && !noOriginal) return passUnchecked(f, 'original');
     if (choice.choice !== 'clean') return cancelled(f);
+    await refreshing;
+    /* Запоминаются отмеченные колонки и те, что предлагались, но сняты: их не предложат снова. */
+    const memo = cols.filter((c) => !c.managed && (picked.has(c.id) || c.suggested || c.remembered)).map((c) => ({ header: c.header, type: c.type, on: picked.has(c.id) }));
+    if (memo.length) send({ type: 'rememberColumns', columns: memo }).catch(() => {});
     const c = await build();
+    if (!c) {
+      checkedFiles.add(sigOf(f));
+      send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: final.summary, body: r.text } }).catch(() => {});
+      toast('ok', tr('file.clean', { name: f.name }), 6000);
+      return f;
+    }
     const file = new File([c.bytes], c.name, { type: c.type, lastModified: f.lastModified });
     checkedFiles.add(sigOf(file));
-    const how = c.same ? tr('file.sameFormat', { copy: c.name }) : tr(same ? 'file.sameFailed' : 'file.converted', { copy: c.name });
-    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: m.summary, body: m.texts[0], note: how, copy: logCopy(c) } }).catch(() => {});
-    toast(same && !c.same ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: m.summary.count, types }) + ' ' + how, 7000);
+    const colsNote = picked.size ? ' ' + tr('file.cols.log', { cols: cols.filter((x) => picked.has(x.id)).map((x) => x.header).join(', ') }) : '';
+    const how = (c.same ? tr('file.sameFormat', { copy: c.name }) : tr(same ? 'file.sameFailed' : 'file.converted', { copy: c.name })) + colsNote;
+    send({ type: 'log', entry: { kind: 'file', host: location.host, file: f.name, summary: final.summary, body: final.texts[0], note: how, copy: logCopy(c) } }).catch(() => {});
+    toast(same && !c.same ? 'warn' : 'ok', tr('file.cleaned', { name: f.name, n: final.summary.count, types: typesText(final.summary) }) + ' ' + how, 7000);
     return file;
   }
 
@@ -1241,6 +1382,7 @@
     enabled = settings.enabled !== false;
     rehydrateOn = settings.rehydrate !== false;
     askImages = settings.askImages !== false;
+    rememberedColumns = Array.isArray(settings.columns) ? settings.columns : [];
     policy = r.policy || {};
     byToken = (r.vault && r.vault.byToken) || {};
     const before = I18N.lang;

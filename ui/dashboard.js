@@ -331,8 +331,8 @@ $('#vault-clear').addEventListener('click', async () => {
 const HIDES = [
   ['hides.auto', ['CARD', 'IBAN', 'EMAIL', 'PHONE', 'SECRET', 'CF', 'SNILS', 'IP', 'PLATE']],
   ['hides.context', ['INN', 'PIVA', 'PASSPORT', 'IDDOC', 'OMS', 'DOB']],
-  ['hides.model', ['PERSON', 'ADDRESS']],
-  ['hides.dict', ['ORG', 'CUSTOM']],
+  ['hides.model', ['PERSON', 'ADDRESS', 'ORG']],
+  ['hides.dict', ['CUSTOM']],
 ];
 function renderHides() {
   const box = $('#hides');

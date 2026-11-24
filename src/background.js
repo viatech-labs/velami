@@ -2,14 +2,17 @@
    на этом компьютере. Сетевых запросов фоновый процесс не делает. */
 importScripts('detector.js', 'sites.js', 'policy.js');
 
-const DEFAULT_SETTINGS = { enabled: true, rehydrate: true, model: true, language: 'auto', dictionary: [], exclusions: [], sites: {}, askImages: true };
+/* orgs: искать названия организаций (правила по правовой форме и модель). columns: колонки таблиц,
+   которые человек уже выбирал скрывать целиком, по имени заголовка. */
+const DEFAULT_SETTINGS = { enabled: true, rehydrate: true, model: true, orgs: true, language: 'auto', dictionary: [], exclusions: [], sites: {}, askImages: true, columns: [] };
+const MAX_COLUMNS_REMEMBERED = 300;
 const SITES = self.__PGSites;
 const POLICY = self.__PGPolicy;
 const OPTIONAL_SITES = SITES.SITES.filter((x) => x.optional);
 const LANGUAGES = ['auto', 'en', 'it', 'ru'];
 const LOG_LIMIT = 300;
 const BODY_LIMIT = 20000;
-const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'cleanDoc', 'setImagesAsk', 'openPreview']);
+const PAGE_MESSAGES = new Set(['maskBatch', 'log', 'scan', 'mask', 'noteInput', 'setExclusion', 'open', 'extractFile', 'cleanDoc', 'setImagesAsk', 'openPreview', 'rememberColumns']);
 const MAX_EXTRACT = 30 * 1024 * 1024;
 
 let state = null;
@@ -32,6 +35,7 @@ function load() {
     loading = Promise.all([chrome.storage.local.get(['settings', 'userSettings', 'policy', 'vault', 'stats']), readPolicy()]).then(async ([r, policy]) => {
       const user = { ...DEFAULT_SETTINGS, ...(r.userSettings || r.settings || {}) };
       user.dictionary = (user.dictionary || []).filter((d) => !d.managed);
+      user.columns = (user.columns || []).filter((c) => !c.managed);
       state = {
         user,
         policy,
@@ -66,18 +70,19 @@ function stats(s) {
   return s.stats;
 }
 
-const ctx = (s, vault) => ({
+const ctx = (s, vault, extraDict = []) => ({
   vault,
-  dictionary: s.settings.dictionary,
+  dictionary: extraDict.length ? [...s.settings.dictionary, ...extraDict] : s.settings.dictionary,
   auto: autoTerms(s),
+  orgs: s.settings.orgs,
   exclusions: new Set(s.settings.exclusions),
 });
 
-/* ---------- локальная модель: имена и адреса без словаря ----------
+/* ---------- локальная модель: имена, адреса и организации без словаря ----------
    Модель работает в offscreen-документе. Найденное хранится только в памяти фонового процесса
    и действует как временный словарь: те же значения маскируются во всех запросах сайта. */
 const MODEL_TTL = 30 * 60 * 1000;
-const MODEL_TYPES = { person: 'PERSON', address: 'ADDRESS' };
+const MODEL_TYPES = { person: 'PERSON', address: 'ADDRESS', organization: 'ORG' };
 const PREVIEW_BUDGET = 250;
 const SEND_BUDGET = 3000;
 const MODEL_MAX_CHARS = 20000;
@@ -91,7 +96,8 @@ function autoTerms(s) {
   if (!s.settings.model) return [];
   const now = Date.now();
   for (const [k, v] of modelTerms) if (now - v.at > MODEL_TTL) modelTerms.delete(k);
-  return [...modelTerms.values()];
+  const all = [...modelTerms.values()];
+  return s.settings.orgs ? all : all.filter((v) => v.type !== 'ORG');
 }
 
 async function modelAvailable() {
@@ -109,7 +115,7 @@ async function ensureOffscreen() {
   creatingOffscreen ||= chrome.offscreen.createDocument({
     url: 'offscreen.html',
     reasons: ['WORKERS'],
-    justification: 'Local name and address recognition model and text extraction from attached PDF and Office files. Runs on this computer, no network.',
+    justification: 'Local name, address and organization recognition model and text extraction from attached PDF and Office files. Runs on this computer, no network.',
   }).finally(() => { creatingOffscreen = null; });
   await creatingOffscreen;
 }
@@ -189,10 +195,11 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function countRemaining(texts, s) {
+function countRemaining(texts, s, extraDict = []) {
   const excl = new Set(s.settings.exclusions);
+  const c = ctx(s, null, extraDict);
   let n = 0;
-  for (const t of texts) n += PG.detect(t, { dictionary: s.settings.dictionary, auto: autoTerms(s) }).filter((f) => !excl.has(f.id)).length;
+  for (const t of texts) n += PG.detect(t, { dictionary: c.dictionary, auto: c.auto, orgs: c.orgs }).filter((f) => !excl.has(f.id)).length;
   return n;
 }
 
@@ -214,7 +221,7 @@ function candidates(s) {
   const now = Date.now();
   inputs = inputs.filter((x) => now - x.at < INPUT_TTL);
   return PG.candidatesFrom(inputs.map((x) => x.text), {
-    dictionary: s.settings.dictionary, auto: autoTerms(s), exclusions: s.settings.exclusions, vaultData: s.vault.data,
+    dictionary: s.settings.dictionary, auto: autoTerms(s), orgs: s.settings.orgs, exclusions: s.settings.exclusions, vaultData: s.vault.data,
   });
 }
 
@@ -254,7 +261,28 @@ async function recognizeFile(texts) {
   return ok && parts.every((p) => p.complete);
 }
 
-async function maskBatch({ texts, trusted, dryRun, file }) {
+/* Колонки таблицы, которые скрываются целиком: каждое значение колонки становится термином словаря
+   на время этого вызова. Одинаковые значения получают одну метку, значение из колонки находится и
+   в других местах файла. Тип колонки задаёт вид метки: ORG, PERSON или CUSTOM. */
+const MAX_FILE_COLUMNS = 60;
+const MAX_COLUMN_VALUES = 5000;
+function columnTerms(columns) {
+  const out = [];
+  const seen = new Set();
+  for (const c of (Array.isArray(columns) ? columns : []).slice(0, MAX_FILE_COLUMNS)) {
+    const type = c && PG.DICT_TYPES.includes(c.type) ? c.type : 'CUSTOM';
+    for (const v of (c && Array.isArray(c.values) ? c.values : []).slice(0, MAX_COLUMN_VALUES)) {
+      const term = String(v || '').trim().slice(0, 200);
+      const key = term.toLowerCase();
+      if (term.length < 2 || !/\p{L}/u.test(term) || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ term, type, column: true });
+    }
+  }
+  return out;
+}
+
+async function maskBatch({ texts, trusted, dryRun, file, columns }) {
   const s = await load();
   if (!s.settings.enabled) return { disabled: true };
   const list = (texts || []).map(String);
@@ -264,13 +292,15 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
   const modelChecked = !modelOn || !pendingModel.length
     || await (file ? recognizeFile(pendingModel) : within(recognize(pendingModel), SEND_BUDGET));
   const vault = dryRun ? new PG.Vault(s.vault.data) : s.vault;
-  const opts = { ...ctx(s, vault), commit: true };
-  const known = PG.candidatesFrom(userText, { dictionary: s.settings.dictionary, auto: opts.auto, exclusions: s.settings.exclusions })
+  const extraDict = file ? columnTerms(columns) : [];
+  const opts = { ...ctx(s, vault, extraDict), commit: true };
+  const known = PG.candidatesFrom(userText, { dictionary: opts.dictionary, auto: opts.auto, orgs: opts.orgs, exclusions: s.settings.exclusions })
     .concat(candidates(s));
   const out = [];
   const byType = {};
   const values = new Map();
   let count = 0;
+  let inColumns = 0;
   let created = 0;
   for (let i = 0; i < list.length; i++) {
     const full = trusted && trusted[i] ? PG.maskText(list[i], opts) : { text: list[i], findings: [] };
@@ -279,14 +309,16 @@ async function maskBatch({ texts, trusted, dryRun, file }) {
     for (const f of [...full.findings, ...r.findings]) {
       if (f.excluded) continue;
       count++;
+      if (f.source === 'column') inColumns++;
       byType[f.type] = (byType[f.type] || 0) + 1;
       if (f.isNew) created++;
       if (file && f.token) values.set(f.id + '\u0000' + f.value, { id: f.id, type: f.type, value: f.value, token: f.token });
     }
   }
-  const remaining = countRemaining(out.filter((_, i) => trusted && trusted[i]), s)
+  const remaining = countRemaining(out.filter((_, i) => trusted && trusted[i]), s, extraDict)
     + out.reduce((n, t) => n + PG.locate(t, known).length, 0);
   const summary = { count, byType, recheck: remaining };
+  if (extraDict.length) summary.columns = inColumns;
   if (!modelChecked && userText.some((t) => t.trim())) summary.model = model.state === 'error' ? 'error' : 'timeout';
   else if (modelOn && !file && userText.some((t) => t.length > MODEL_MAX_CHARS)) summary.model = 'partial';
   if (!dryRun) {
@@ -357,7 +389,9 @@ async function setSettings(patch) {
   if (typeof patch.enabled === 'boolean') next.enabled = patch.enabled;
   if (typeof patch.rehydrate === 'boolean') next.rehydrate = patch.rehydrate;
   if (typeof patch.model === 'boolean') next.model = patch.model;
+  if (typeof patch.orgs === 'boolean') next.orgs = patch.orgs;
   if (typeof patch.askImages === 'boolean') next.askImages = patch.askImages;
+  if (Array.isArray(patch.columns)) next.columns = normalizeColumns(patch.columns);
   if (LANGUAGES.includes(patch.language)) next.language = patch.language;
   if (Array.isArray(patch.dictionary)) {
     next.dictionary = patch.dictionary
@@ -436,6 +470,29 @@ async function cleanDocFile({ name, data, values }) {
   return r || { error: 'no reply' };
 }
 
+/* Память о колонках: заголовок (без регистра и лишних пробелов), скрывать ли, какой меткой.
+   Снятая галочка тоже запоминается, чтобы колонку не предлагали снова. */
+const columnKey = (header) => String(header || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 120);
+function normalizeColumns(list) {
+  const out = [];
+  const seen = new Set();
+  for (const c of list) {
+    const header = columnKey(c && c.header);
+    if (header.length < 1 || seen.has(header)) continue;
+    seen.add(header);
+    out.push({ header, on: !!(c && c.on), type: c && PG.DICT_TYPES.includes(c.type) ? c.type : 'CUSTOM' });
+  }
+  return out.slice(-MAX_COLUMNS_REMEMBERED);
+}
+
+async function rememberColumns({ columns }) {
+  const s = await load();
+  if (POLICY.isLocked(s.policy, 'columns')) return s.settings;
+  const fresh = normalizeColumns(Array.isArray(columns) ? columns : []);
+  const keys = new Set(fresh.map((c) => c.header));
+  return setSettings({ columns: [...(s.user.columns || []).filter((c) => !keys.has(c.header)), ...fresh] });
+}
+
 async function setExclusion({ id, excluded }) {
   const s = await load();
   const set = new Set(s.settings.exclusions);
@@ -452,13 +509,16 @@ async function handle(msg, sender) {
     case 'noteInput':
       noteInput(msg.text);
       return { ok: true };
-    case 'maskBatch': return maskBatch({ texts: msg.texts, trusted: msg.trusted, dryRun: fromExtensionPage && !!msg.dryRun, file: !!msg.file });
+    /* Прикидка для файла (dryRun) ничего не пишет в хранилище: так диалог показывает, что изменится
+       при другом выборе колонок, а метки создаются один раз, когда копия собирается. */
+    case 'maskBatch': return maskBatch({ texts: msg.texts, trusted: msg.trusted, dryRun: (fromExtensionPage || !!msg.file) && !!msg.dryRun, file: !!msg.file, columns: msg.columns });
     case 'log': return addLog(msg.entry, sender);
     case 'scan': return scan(msg, sender);
     case 'setExclusion': return setExclusion(msg);
     case 'extractFile': return extractFile(msg);
     case 'cleanDoc': return cleanDocFile(msg);
     case 'setImagesAsk': return setSettings({ askImages: !!msg.ask });
+    case 'rememberColumns': return rememberColumns(msg);
     /* Предпросмотр копии: сама копия остаётся во вкладке чата, страница предпросмотра забирает её оттуда. */
     case 'openPreview': {
       if (fromExtensionPage || !sender.tab || !/^[0-9a-f-]{36}$/.test(String(msg.id))) return { error: 'forbidden' };

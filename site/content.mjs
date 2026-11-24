@@ -49,7 +49,7 @@ export const CONTENT = {
       ai: 'The AI receives',
       count: 'Hidden: {n}',
       none: 'Nothing to hide yet',
-      note: 'This box runs the same rules as the extension, right in this page. Nothing is sent anywhere. In the extension a local model also finds names and addresses.',
+      note: 'This box runs the same rules as the extension, right in this page. Nothing is sent anywhere. In the extension a local model also finds names, addresses and company names.',
       sample: 'Hi, help me write to my bank. My card 4111 1111 1111 1111 was stolen. IBAN GB82 WEST 1234 5698 7654 32, email john.carter@example.com, phone +44 20 7946 0958.',
     },
     who: {
@@ -75,7 +75,7 @@ export const CONTENT = {
     types: {
       title: 'What it hides',
       lead: 'Numbers are matched by format and checksum, so a random number is not mistaken for a card. Names and addresses are found by a compact AI model that ships with the extension and runs offline.',
-      list: ['Names', 'Addresses', 'Bank cards', 'IBAN', 'Phone numbers', 'E-mail', 'Tax codes', 'Passports and ID cards', 'Dates of birth', 'Car plates', 'API keys', 'Passwords', 'IP addresses', 'Your own words'],
+      list: ['Names', 'Addresses', 'Company names', 'Bank cards', 'IBAN', 'Phone numbers', 'E-mail', 'Tax codes', 'Passports and ID cards', 'Dates of birth', 'Car plates', 'API keys', 'Passwords', 'IP addresses', 'Your own words'],
     },
     rows: { title: 'What Velami hides', msg: 'In every message', files: 'In attached files', sites: 'On the sites you use' },
     proof: { panel: 'What the AI will see', items: [['John Carter', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Milan', null]], keep: 'stays as is', log: 'Sent to chatgpt.com', logText: 'My card [[CARD_1]] was stolen. Write to [[EMAIL_1]]', echo: 'Server received', echoOk: 'No hidden value reached the server' },
@@ -172,7 +172,7 @@ export const CONTENT = {
       ai: 'L’IA riceve',
       count: 'Nascosti: {n}',
       none: 'Ancora niente da nascondere',
-      note: 'Questo riquadro usa le stesse regole dell’estensione, direttamente in questa pagina. Non viene inviato nulla. Nell’estensione un modello locale trova anche nomi e indirizzi.',
+      note: 'Questo riquadro usa le stesse regole dell’estensione, direttamente in questa pagina. Non viene inviato nulla. Nell’estensione un modello locale trova anche nomi, indirizzi e nomi di aziende.',
       sample: 'Ciao, aiutami a scrivere alla banca. Mi hanno rubato la carta 4111 1111 1111 1111. IBAN IT60 X054 2811 1010 0000 0123 456, codice fiscale RSSMRA85T10A562S, mail mario.rossi@example.com.',
     },
     who: {
@@ -198,7 +198,7 @@ export const CONTENT = {
     types: {
       title: 'Cosa nasconde',
       lead: 'I numeri vengono riconosciuti per formato e cifra di controllo, così un numero qualsiasi non viene scambiato per una carta. Nomi e indirizzi li trova un piccolo modello di IA incluso nell’estensione, che funziona offline.',
-      list: ['Nomi', 'Indirizzi', 'Carte bancarie', 'IBAN', 'Telefoni', 'E-mail', 'Codice fiscale e P. IVA', 'Documenti d’identità', 'Date di nascita', 'Targhe', 'Chiavi API', 'Password', 'Indirizzi IP', 'Le tue parole'],
+      list: ['Nomi', 'Indirizzi', 'Nomi di aziende', 'Carte bancarie', 'IBAN', 'Telefoni', 'E-mail', 'Codice fiscale e P. IVA', 'Documenti d’identità', 'Date di nascita', 'Targhe', 'Chiavi API', 'Password', 'Indirizzi IP', 'Le tue parole'],
     },
     rows: { title: 'Cosa nasconde Velami', msg: 'In ogni messaggio', files: 'Nei file allegati', sites: 'Sui siti che usi' },
     proof: { panel: 'Cosa vedrà l’IA', items: [['Mario Rossi', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Milano', null]], keep: 'resta com’è', log: 'Inviato a chatgpt.com', logText: 'Mi hanno rubato la carta [[CARD_1]]. Scrivi a [[EMAIL_1]]', echo: 'Il server ha ricevuto', echoOk: 'Nessun dato nascosto è arrivato al server' },
@@ -295,7 +295,7 @@ export const CONTENT = {
       ai: 'ИИ получает',
       count: 'Скрыто: {n}',
       none: 'Пока скрывать нечего',
-      note: 'Здесь работают те же правила, что в расширении, прямо на этой странице. Ничего никуда не отправляется. В расширении имена и адреса дополнительно находит локальная модель.',
+      note: 'Здесь работают те же правила, что в расширении, прямо на этой странице. Ничего никуда не отправляется. В расширении имена, адреса и названия компаний дополнительно находит локальная модель.',
       sample: 'Помоги написать в банк. Меня зовут Анна Сергеевна Миронова, карта 4111 1111 1111 1111 пропала. Почта anna.mironova@example.com, телефон +7 921 123-45-67.',
     },
     who: {
@@ -321,7 +321,7 @@ export const CONTENT = {
     types: {
       title: 'Что скрывает',
       lead: 'Номера проверяются по формату и контрольной сумме, поэтому случайное число не примут за карту. Имена и адреса находит небольшая модель ИИ, которая входит в расширение и работает без интернета.',
-      list: ['Имена', 'Адреса', 'Банковские карты', 'IBAN', 'Телефоны', 'E-mail', 'ИНН и СНИЛС', 'Паспорта и удостоверения', 'Даты рождения', 'Госномера', 'API-ключи', 'Пароли', 'IP-адреса', 'Ваши слова'],
+      list: ['Имена', 'Адреса', 'Названия компаний', 'Банковские карты', 'IBAN', 'Телефоны', 'E-mail', 'ИНН и СНИЛС', 'Паспорта и удостоверения', 'Даты рождения', 'Госномера', 'API-ключи', 'Пароли', 'IP-адреса', 'Ваши слова'],
     },
     rows: { title: 'Что скрывает Velami', msg: 'В каждом сообщении', files: 'Во вложенных файлах', sites: 'На сайтах, где вы общаетесь' },
     proof: { panel: 'Что увидит ИИ', items: [['Анна Миронова', '[[PERSON_1]]'], ['4111 1111 1111 1111', '[[CARD_1]]'], ['Москва', null]], keep: 'останется как есть', log: 'Отправлено на chatgpt.com', logText: 'Украли карту [[CARD_1]]. Напиши на [[EMAIL_1]]', echo: 'Сервер получил', echoOk: 'Ни одно скрытое значение до сервера не дошло' },

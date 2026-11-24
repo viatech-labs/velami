@@ -336,6 +336,67 @@ try {
     assert.match(book.parts['xl/workbook.xml'].toString(), /name="CF CF_\d+"/);
   });
 
+  /* Таблица продаж: колонки с контрагентами предлагаются целиком, одинаковые значения в разном
+     регистре и в примечании получают одну метку, выбор запоминается по заголовку. */
+  const listItems = async () => {
+    const d = await waitDialog();
+    const listEl = find(d, (n) => cls(n, 'ask-list'));
+    const out = [];
+    for (const label of kids(listEl).filter((n) => n.nodeName === 'LABEL')) {
+      const input = find(label, (n) => n.nodeName === 'INPUT');
+      const { object } = await cdp.send('DOM.resolveNode', { nodeId: input.nodeId });
+      const { result } = await cdp.send('Runtime.callFunctionOn', { objectId: object.objectId, functionDeclaration: 'function () { return this.checked; }', returnByValue: true });
+      out.push([textOf(find(label, (n) => n.nodeName === 'B')), result.value, textOf(find(label, (n) => n.nodeName === 'SMALL'))]);
+    }
+    return out;
+  };
+  await pick('vendite.xlsx');
+  const salesAsk = textOf(await waitDialog(400));
+  const salesChecked = await listItems();
+  await page.screenshot({ path: path.join(out, 'excel-columns-ask.png') });
+  await press('Invia copia pulita');
+  const sales = await sent('vendite.xlsx');
+  assert.ok(sales, 'копия vendite.xlsx не загружена');
+  const salesText = (await Office.extract(sales.bytes, 'vendite.xlsx')).text;
+  check('Excel с контрагентами: предложены колонки Cliente, Reparto и Agente, колонка Note нет', () => {
+    assert.match(salesAsk, /Nascondi colonne intere/);
+    const byHeader = Object.fromEntries(salesChecked.map(([h, on, hint]) => [h, { on, hint }]));
+    assert.deepEqual(Object.keys(byHeader).sort(), ['Agente', 'Cliente', 'Note', 'Reparto'], JSON.stringify(salesChecked));
+    assert.ok(byHeader.Cliente.on && /Organizzazione/.test(byHeader.Cliente.hint), 'Cliente: ' + JSON.stringify(byHeader.Cliente));
+    assert.ok(byHeader.Agente.on && /Nome/.test(byHeader.Agente.hint), 'Agente: ' + JSON.stringify(byHeader.Agente));
+    assert.ok(byHeader.Reparto.on, 'Reparto не отмечена');
+    assert.ok(!byHeader.Note.on, 'Note отмечена');
+    assert.match(byHeader.Cliente.hint, /4 valori distinti/);
+  });
+  check('Excel с контрагентами: в копии вся колонка скрыта, один клиент в разном регистре и в примечании с одной меткой', () => {
+    assert.ok(!/Rossi|Alfa Trading|Bianchi|Verdi|Nord Ovest|Centro|\bSud\b/.test(salesText), 'в копии осталось: ' + salesText);
+    const rows = salesText.split('\n').filter((l) => /^\[\[/.test(l));
+    assert.equal(rows.length, 5, salesText);
+    const [r1, r2, r3, r4, resi] = rows.map((l) => l.split('\t'));
+    assert.equal(r1[0], r3[0], 'Rossi S.r.l. и ROSSI S.R.L. получили разные метки');
+    assert.notEqual(r1[0], r2[0]);
+    assert.equal(r1[1], r2[1], 'Nord Ovest в двух строках с разными метками');
+    assert.match(r1[0], /^\[\[ORG_\d+\]\]$/);
+    assert.match(r1[1], /^\[\[CUSTOM_\d+\]\]$/);
+    assert.match(r1[2], /^\[\[PERSON_\d+\]\]$/);
+    assert.equal(r1[2], r3[2], 'Mario Rossi в двух строках с разными метками');
+    assert.equal(r2[5], `Riordino ${r2[0]} a marzo`, 'название клиента в примечании не той меткой');
+    assert.equal(resi[0], r2[0], 'на листе Resi тот же клиент другой меткой');
+    assert.match(salesText, /^Cliente\tReparto\tAgente\tImporto\tData\tNote$/m, 'заголовки без галочки остаются');
+    assert.match(salesText, /Pagamento a 30 gg/);
+  });
+  await pick('vendite.xlsx');
+  const salesAgain = await listItems();
+  await press('Annulla');
+  const salesState = await ext({ type: 'state' });
+  check('Excel с контрагентами: выбор колонок запомнен по заголовку', () => {
+    const cliente = salesAgain.find(([h]) => h === 'Cliente');
+    assert.ok(cliente && cliente[1] && /tua scelta precedente/.test(cliente[2]), JSON.stringify(salesAgain));
+    const note = salesAgain.find(([h]) => h === 'Note');
+    assert.ok(note && !note[1] && !/tua scelta precedente/.test(note[2]), 'Note не предлагалась и не должна запоминаться: ' + JSON.stringify(note));
+    assert.deepEqual(salesState.settings.columns.map((c) => [c.header, c.on, c.type]).sort(), [['agente', true, 'PERSON'], ['cliente', true, 'ORG'], ['reparto', true, 'CUSTOM']]);
+  });
+
   await sameFormat('macro.docm', 'macro.docx', OFFICE.docx, ['[[EMAIL_']);
   check('Word с макросами: уходит .docx без макросов', () => {
     assert.equal(uploads['macro.docm'], undefined);

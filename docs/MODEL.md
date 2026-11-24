@@ -1,7 +1,7 @@
-# Local name and address model
+# Local name, address and organisation model
 
-Rules find what has a format: cards, IBANs, tax codes, phone numbers, keys. Names and addresses
-have no format, so the extension ships a neural model for them. It runs on the user's computer,
+Rules find what has a format: cards, IBANs, tax codes, phone numbers, keys. Names, addresses and
+most company names have no format, so the extension ships a neural model for them. It runs on the user's computer,
 inside the extension, with no network.
 
 ## The model
@@ -11,12 +11,13 @@ inside the extension, with no network.
 | Base | GLiNER multi PII v1, `urchade/gliner_multi_pii-v1`, Apache-2.0 |
 | ONNX export | `onnx-community/gliner_multi_pii-v1`, revision `2e0397a` |
 | Encoder | `microsoft/mdeberta-v3-base`, MIT |
-| Labels | `person`, `address` |
+| Labels | `person`, `address`, `organization` |
 | Runtime | onnxruntime-web 1.31.1 (MIT), WASM, SIMD, up to 4 threads |
 | Files in the package | `models/ner/model.onnx` 1.7 MB (graph), `model.data` 164 MB (weights), `tokenizer.json` 2.7 MB, `meta.json`, `NOTICE.txt` |
 
 GLiNER scores every span of up to 12 words against every label. This gives exact boundaries for
-inflected Russian names and for multi-word addresses.
+inflected Russian names and for multi-word addresses. The labels are given as text, so
+`organization` was added without retraining: the third label costs about 1.6% of inference time.
 
 Changes from the original:
 
@@ -65,6 +66,15 @@ dictionary. The model threshold is 0.5. Findings with a score below 0.8 are show
 panel, marked "the model is not sure, please check". Names of AI services (ChatGPT, Claude and so
 on) are dropped by a stop list.
 
+For `organization` the stop list is wider (`src/ner-core.js`, `NOT_ORGS`, `PUBLIC_ORG`): AI
+services and common software (Excel, Google Sheets, 1С), payment networks, and public bodies named
+by their type (Agenzia delle Entrate, Comune di Milano, ФНС, Минфин, IRS, Department of Labor). A
+question about the law or a spreadsheet formula makes no sense without them, and they are nobody's
+secret. Banks, suppliers, clients and employers are hidden: the extension cannot know whose
+counterparty a company is. A finding that is only a legal form ("ООО", "S.r.l.") or a common noun
+without a capital letter ("банк", "our office") is dropped too. Russian inflection is handled on
+the stop list ("Яндексе", "Сбером") so the exception works in any case.
+
 Timeouts:
 
 - the panel waits 250 ms for the model, then shows what the rules found and adds the model's
@@ -78,21 +88,23 @@ was checked". The model can be turned off in the popup.
 
 ## Quality
 
-`npm run eval:model`: the open set `test/model-set.json` of 118 made-up texts with names and
-addresses marked. 90 short phrases, 30 per language, and 28 documents: letters, contracts, tables,
-chats, forms, and one document with no personal data. Threshold 0.5.
+`npm run eval:model`: the open set `test/model-set.json` of 154 made-up texts with names,
+addresses and organisations marked. 90 short phrases, 30 per language, 28 documents (letters,
+contracts, tables, chats, forms, and one document with no personal data) and 36 texts about
+organisations with their traps: software, AI services, public bodies, generic nouns. Threshold 0.5.
 
 The script prints two tables. The first shows the model alone. The second shows the pipeline, that
 is what the extension actually replaces: rules, model findings and variants of found names.
 
 | Slice | Model precision | Model recall | Pipeline precision | Pipeline recall |
 |---|---|---|---|---|
-| EN | 100% | 96% | 100% | 98% |
-| IT | 96% | 98% | 96% | 98% |
-| RU | 98% | 82% | 98% | 98% |
-| Phrases | 96% | 94% | 96% | 97% |
-| Documents | 100% | 89% | 100% | 99% |
-| All | 98% | 91% | 98% | 98% |
+| EN | 99% | 97% | 99% | 99% |
+| IT | 96% | 97% | 96% | 99% |
+| RU | 100% | 87% | 100% | 98% |
+| Phrases | 97% | 95% | 97% | 97% |
+| Documents | 98% | 90% | 98% | 99% |
+| Organisations | 99% | 98% | 99% | 99% |
+| All | 98% | 93% | 98% | 98% |
 
 The model alone is weakest on Russian documents. It misses addresses in the official format
 ("620014, г. Екатеринбург, ул. Малышева, д. 51, кв. 17"), signatures with initials
@@ -111,7 +123,16 @@ a full name it finds in a short phrase. So rules work next to the model (`src/de
   "F. Moretti". A surname alone without context is not added, it matches ordinary words too often
   ("Conti", "Testa");
 - what the model finds is searched by word stem, so "Ивану Сергеевичу Кузнецову" also catches
-  "Иван Сергеевич Кузнецов". The user's dictionary stays in the nominative case.
+  "Иван Сергеевич Кузнецов". The user's dictionary stays in the nominative case;
+- an organisation by its legal form: "ООО «Ромашка»", "ПАО Сбербанк", "Банк «Открытие»",
+  "Rossi S.r.l.", "Bianchi & Figli S.n.c.", "Acme Holdings Ltd", "Mueller GmbH & Co. KG", more than
+  forty forms. The whole span including the form is one label. Up to five capitalised words before
+  the form are taken, linked by "di", "of", "&" and the like but never by "e", "and", "и", so two
+  neighbouring companies stay two labels. Sentence openers and forms of address ("Spettabile",
+  "Yesterday") are not part of the name. Italian forms without dots count only as written on
+  letterheads ("SpA", "Srl"), so "Hotel Spa" is not a company. Quotes and case do not change the
+  label: "ООО «Ромашка»" and "ООО \"Ромашка\"" are the same organisation. The rule works in long
+  tables where the model runs out of budget.
 
 The rules were checked for false positives on 10 million characters of documentation and
 correspondence (781 files): every address and name found was real. The detector spends a few
@@ -124,7 +145,10 @@ There will be errors on real texts. Known ones:
   "Большая Дмитровка, 7/5" without "ул.";
 - rare surnames without a first name ("Greco") and a first name without a surname in a long
   English text ("Robert");
-- extra findings on "самозанятый", "dipendente part-time" and on a city name without an address.
+- extra findings on "dipendente part-time" and on a city name without an address;
+- a shop or brand name without a legal form that the model does not know ("Перекрёсток"), and a
+  capitalised verb before a company name that the rule takes into the label ("Contattare Rossi
+  S.r.l." hides the verb too, which is harmless but imprecise).
 
 That is why the interface calls the model a helper, not a guarantee. Important names are still
 worth adding to the dictionary.
@@ -173,7 +197,7 @@ Memory is taken only while the model is loaded: from the first check until 5 min
 ## Open questions
 
 - On a slow dual-core laptop a short check takes about half a second or more. If real users
-  notice, the next step is a model with a smaller encoder, distillation for two labels, or WebGPU
+  notice, the next step is a model with a smaller encoder, distillation for three labels, or WebGPU
   where available.
 - The model ships in the package, the extension never downloads files.
 - The evaluation set should grow with texts that are realistic in structure but made up in

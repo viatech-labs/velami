@@ -8,7 +8,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.__PGPolicy = api;
 })(typeof self !== 'undefined' ? self : this, function () {
-  const LOCKABLE = { enabled: 'boolean', rehydrate: 'boolean', model: 'boolean', askImages: 'boolean', language: 'string' };
+  const LOCKABLE = { enabled: 'boolean', rehydrate: 'boolean', model: 'boolean', orgs: 'boolean', askImages: 'boolean', language: 'string' };
   const LANGUAGES = ['auto', 'en', 'it', 'ru'];
   const DICT_TYPES = ['PERSON', 'ORG', 'ADDRESS', 'CUSTOM'];
   const MAX_TERMS = 5000;
@@ -34,16 +34,26 @@
       seen.add(key);
       dictionary.push({ term, type: DICT_TYPES.includes(d && d.type) ? d.type : 'CUSTOM' });
     }
+    /* Колонки таблиц, которые в файлах всегда скрываются целиком: по имени заголовка, без регистра. */
+    const columns = [];
+    const seenCols = new Set();
+    for (const c of Array.isArray(r.columns) ? r.columns : []) {
+      const header = text(c && typeof c === 'object' ? c.header : c).replace(/\s+/g, ' ').toLowerCase();
+      if (header.length < 1 || seenCols.has(header) || columns.length >= MAX_TERMS) continue;
+      seenCols.add(header);
+      columns.push({ header, on: true, type: DICT_TYPES.includes(c && c.type) ? c.type : 'CUSTOM' });
+    }
     const policy = {
       organization: text(r.organization),
       supportContact: text(r.supportContact),
       locked,
       dictionary,
+      columns,
       allowExclusions: allow(r.allowExclusions),
       allowOriginalFiles: allow(r.allowOriginalFiles),
       allowUncheckedFiles: allow(r.allowUncheckedFiles),
     };
-    policy.managed = !!(policy.organization || policy.supportContact || Object.keys(locked).length || dictionary.length
+    policy.managed = !!(policy.organization || policy.supportContact || Object.keys(locked).length || dictionary.length || columns.length
       || !policy.allowExclusions || !policy.allowOriginalFiles || !policy.allowUncheckedFiles);
     return policy;
   }
@@ -51,7 +61,9 @@
   function apply(user, policy) {
     const own = (user.dictionary || []).filter((d) => !d.managed);
     const taken = new Set(policy.dictionary.map((d) => d.term.toLowerCase()));
-    return {
+    const ownCols = (user.columns || []).filter((c) => !c.managed);
+    const takenCols = new Set((policy.columns || []).map((c) => c.header));
+    const out = {
       ...user,
       ...policy.locked,
       dictionary: [
@@ -60,6 +72,13 @@
       ],
       exclusions: policy.allowExclusions ? user.exclusions || [] : [],
     };
+    if (user.columns || (policy.columns || []).length) {
+      out.columns = [
+        ...(policy.columns || []).map((c) => ({ ...c, managed: true })),
+        ...ownCols.filter((c) => !takenCols.has(c.header)),
+      ];
+    }
+    return out;
   }
 
   /* Ключ настройки пользователя, который политика не даёт менять. */
